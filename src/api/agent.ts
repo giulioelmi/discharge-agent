@@ -47,6 +47,11 @@ function getMockResponse(userMessage: string, patient: Patient | null): string {
   return MOCK_RESPONSES.default;
 }
 
+/** One-shot ask — used by inline AI buttons in the worklist */
+export async function askAgent(patient: Patient, prompt: string): Promise<string> {
+  return sendChatMessage([{ role: 'user', content: prompt }], patient);
+}
+
 export async function sendChatMessage(
   messages: ChatMessage[],
   patient: Patient | null
