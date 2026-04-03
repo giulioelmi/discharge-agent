@@ -1,6 +1,7 @@
 import { Bed, Patient, BedStatus } from '../types';
 import { useAppStore } from '../store/useAppStore';
 import { Loader2 } from 'lucide-react';
+import MetricsBar from './MetricsBar';
 
 function bedStatusStyle(status: BedStatus) {
   switch (status) {
@@ -146,7 +147,9 @@ export default function BedBoard() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-3">
+    <div className="flex-1 overflow-y-auto flex flex-col">
+      <MetricsBar />
+    <div className="p-3">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xs font-bold text-slate-600 uppercase tracking-wider">
           Bed Board — 4-North ({beds.length} beds)
@@ -175,6 +178,7 @@ export default function BedBoard() {
           />
         ))}
       </div>
+    </div>
     </div>
   );
 }
