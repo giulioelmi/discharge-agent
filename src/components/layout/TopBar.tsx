@@ -1,32 +1,92 @@
-import { useState, useEffect } from 'react';
-import { Bell, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Bell, RefreshCw, ChevronDown, Check } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
+
+const DEPARTMENTS = [
+  { id: 'icu',      label: 'ICU',              sub: 'Intensive Care Unit' },
+  { id: '4-north',  label: '4-North',          sub: 'Medical/Surgical' },
+  { id: '3-south',  label: '3-South',          sub: 'Medical/Surgical' },
+  { id: 'pacu',     label: 'PACU',             sub: 'Post-Anesthesia Care' },
+  { id: 'ed',       label: 'Emergency Dept',   sub: 'Emergency' },
+  { id: '5-east',   label: '5-East',           sub: 'Oncology' },
+  { id: 'ccu',      label: 'Cardiac Care',     sub: 'Cardiac Care Unit' },
+];
 
 export default function TopBar() {
   const { alerts, refresh, loading } = useAppStore();
   const [now, setNow] = useState(new Date());
+  const [deptOpen, setDeptOpen] = useState(false);
+  const [selectedDept, setSelectedDept] = useState(DEPARTMENTS[0]); // ICU default
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(id);
   }, []);
 
-  const unread = alerts.filter((a) => !a.snoozed).length;
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDeptOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
+  const unread = alerts.filter((a) => !a.snoozed).length;
   const formatted = now.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
+    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
   });
   const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
   return (
     <header className="flex items-center justify-between px-4 py-2 bg-white border-b border-slate-200 flex-shrink-0">
-      {/* Left: app identity */}
-      <div className="flex items-center gap-3">
-        <h1 className="text-base font-bold text-slate-800">FlowBoard</h1>
-        <span className="hidden sm:block text-xs text-slate-500">Discharge Optimization</span>
+
+      {/* Left: department switcher */}
+      <div className="relative" ref={dropdownRef}>
+        <button
+          onClick={() => setDeptOpen((v) => !v)}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors group"
+        >
+          <div className="w-6 h-6 rounded bg-teal-600 flex items-center justify-center flex-shrink-0">
+            <span className="text-white text-[9px] font-bold">KB</span>
+          </div>
+          <div className="text-left leading-tight">
+            <div className="text-sm font-bold text-slate-800 group-hover:text-teal-700 transition-colors">
+              {selectedDept.label}
+            </div>
+            <div className="text-[10px] text-slate-400">{selectedDept.sub}</div>
+          </div>
+          <ChevronDown
+            size={13}
+            className={`text-slate-400 transition-transform ml-1 ${deptOpen ? 'rotate-180' : ''}`}
+          />
+        </button>
+
+        {deptOpen && (
+          <div className="absolute left-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-lg shadow-lg z-50 py-1 overflow-hidden">
+            <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
+              Keck Medicine of USC
+            </div>
+            {DEPARTMENTS.map((dept) => (
+              <button
+                key={dept.id}
+                onClick={() => { setSelectedDept(dept); setDeptOpen(false); }}
+                className="flex items-center justify-between w-full px-3 py-2 hover:bg-slate-50 transition-colors text-left"
+              >
+                <div>
+                  <div className="text-xs font-semibold text-slate-700">{dept.label}</div>
+                  <div className="text-[10px] text-slate-400">{dept.sub}</div>
+                </div>
+                {selectedDept.id === dept.id && (
+                  <Check size={13} className="text-teal-600 flex-shrink-0" />
+                )}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Center: date/time */}
@@ -62,12 +122,7 @@ export default function TopBar() {
           </div>
           <div className="hidden sm:block leading-tight">
             <div className="text-xs font-semibold text-slate-700">Sarah Chen</div>
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] text-slate-500">RN</span>
-              <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-teal-100 text-teal-700 uppercase tracking-wide">
-                4-North
-              </span>
-            </div>
+            <div className="text-[10px] text-slate-500">RN</div>
           </div>
         </div>
       </div>

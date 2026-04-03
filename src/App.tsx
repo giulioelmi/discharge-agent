@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { AppProvider } from './store/useAppStore';
 import TopBar from './components/layout/TopBar';
-import MetricsBar from './components/MetricsBar';
 import PatientPanel from './components/PatientPanel';
 import WorklistTab from './components/WorklistTab';
 import CapacityView from './components/CapacityView';
@@ -43,7 +42,6 @@ function AppShell() {
   return (
     <div className="flex flex-col h-screen bg-slate-100 overflow-hidden font-sans">
       <TopBar />
-      <MetricsBar />
       <TabBar active={tab} onChange={setTab} />
 
       {/* Tab content */}

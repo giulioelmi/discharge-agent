@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import {
   FlaskConical, Truck, ClipboardList, Users, Package, Pill,
-  Bot, ChevronDown, ChevronUp, Clock, CheckCircle2, Loader2,
+  ChevronDown, ChevronUp, CheckCircle2, Loader2,
+  ArrowUp, ArrowDown, Zap, CheckCheck,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { Blocker, Lab, Patient } from '../types';
@@ -72,43 +73,109 @@ function labWaitClass(iso: string) {
 }
 
 // ---------------------------------------------------------------------------
-// AI inline response per blocker
+// Resolve logic — which blockers can the AI agent act on vs advise only
 // ---------------------------------------------------------------------------
 
-function AskAIButton({ patient, blocker }: { patient: Patient; blocker: Blocker }) {
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [response, setResponse] = useState<string | null>(null);
+type ResolveMode = 'action' | 'advisory';
 
-  const handleClick = async () => {
-    if (open) { setOpen(false); return; }
-    setOpen(true);
-    if (response) return; // already fetched
-    setLoading(true);
-    const prompt = `How do I resolve this discharge blocker for ${patient.name} (${patient.diagnosis})? Blocker: "${blocker.description}"`;
+function resolveMode(blocker: Blocker): ResolveMode {
+  // Agent can actively submit/trigger: transport requests, MD pages, medication orders
+  if (['transport', 'md-order', 'medication'].includes(blocker.type)) return 'action';
+  // lab-pending that is resolvable = can escalate to STAT
+  if (blocker.type === 'lab-pending' && blocker.resolvable) return 'action';
+  // family, placement, non-resolvable lab = advisory only
+  return 'advisory';
+}
+
+function agentActionPrompt(patient: Patient, blocker: Blocker): string {
+  const name = patient.name;
+  const diag = patient.diagnosis;
+  switch (blocker.type) {
+    case 'transport':
+      return `Submit a transport request for ${name} (${diag}). Blocker: "${blocker.description}". Confirm what was sent.`;
+    case 'md-order':
+      return `Page ${patient.physician} with an urgent discharge order request for ${name} (${diag}). Blocker: "${blocker.description}". Confirm what was sent.`;
+    case 'medication':
+      return `Notify pharmacy and draft a medication reconciliation order for ${name} (${diag}). Blocker: "${blocker.description}". Confirm what was done.`;
+    case 'lab-pending':
+      return `Escalate the pending lab to STAT for ${name} (${diag}). Blocker: "${blocker.description}". Confirm escalation.`;
+    default:
+      return `Resolve this discharge blocker for ${name} (${diag}): "${blocker.description}"`;
+  }
+}
+
+function agentAdvisoryPrompt(patient: Patient, blocker: Blocker): string {
+  const name = patient.name;
+  switch (blocker.type) {
+    case 'family':
+      return `Provide brief step-by-step next actions for a nurse to resolve this family blocker for ${name}: "${blocker.description}"`;
+    case 'placement':
+      return `Provide brief step-by-step next actions to resolve this placement blocker for ${name}: "${blocker.description}"`;
+    case 'lab-pending':
+      return `Provide brief guidance on what to do while waiting for this lab result for ${name}: "${blocker.description}"`;
+    default:
+      return `Provide brief next steps to resolve this discharge blocker for ${name}: "${blocker.description}"`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Resolve button — single button, handles both action and advisory modes
+// ---------------------------------------------------------------------------
+
+type ResolveState = 'idle' | 'loading' | 'done';
+
+function ResolveButton({ patient, blocker }: { patient: Patient; blocker: Blocker }) {
+  const [state, setState] = useState<ResolveState>('idle');
+  const [result, setResult] = useState<string | null>(null);
+  const mode = resolveMode(blocker);
+
+  const handleResolve = async () => {
+    if (state === 'done') { setState('idle'); setResult(null); return; }
+    if (state === 'loading') return;
+    setState('loading');
+    const prompt = mode === 'action'
+      ? agentActionPrompt(patient, blocker)
+      : agentAdvisoryPrompt(patient, blocker);
     const res = await askAgent(patient, prompt);
-    setResponse(res);
-    setLoading(false);
+    setResult(res);
+    setState('done');
   };
 
   return (
     <div className="mt-1.5">
       <button
-        onClick={handleClick}
-        className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border border-violet-300 text-violet-600 hover:bg-violet-50 font-medium transition-colors"
+        onClick={handleResolve}
+        disabled={state === 'loading'}
+        className={`flex items-center gap-1 text-[10px] px-2.5 py-1 rounded font-semibold transition-colors ${
+          state === 'done'
+            ? 'bg-green-100 text-green-700 border border-green-300'
+            : mode === 'action'
+            ? 'bg-teal-600 text-white hover:bg-teal-700'
+            : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200'
+        }`}
       >
-        <Bot size={10} />
-        {open ? 'Hide AI' : 'Ask AI'}
+        {state === 'loading' && <Loader2 size={9} className="animate-spin" />}
+        {state === 'done' && <CheckCheck size={9} />}
+        {state === 'idle' && mode === 'action' && <Zap size={9} />}
+        {state === 'loading' ? 'Agent working…'
+          : state === 'done' ? 'Done — hide'
+          : mode === 'action' ? 'Resolve'
+          : 'Resolve'}
       </button>
-      {open && (
-        <div className="mt-1.5 p-2 rounded bg-violet-50 border border-violet-200 text-[10px] text-slate-700 leading-relaxed">
-          {loading ? (
-            <span className="flex items-center gap-1 text-slate-400">
-              <Loader2 size={10} className="animate-spin" /> Thinking…
-            </span>
-          ) : (
-            response
+
+      {state === 'done' && result && (
+        <div className={`mt-1.5 p-2 rounded text-[10px] leading-relaxed border ${
+          mode === 'action'
+            ? 'bg-teal-50 border-teal-200 text-teal-800'
+            : 'bg-blue-50 border-blue-200 text-slate-700'
+        }`}>
+          {mode === 'action' && (
+            <span className="font-semibold text-teal-700 block mb-0.5">✓ Action taken:</span>
           )}
+          {mode === 'advisory' && (
+            <span className="font-semibold text-blue-700 block mb-0.5">Steps to resolve:</span>
+          )}
+          {result}
         </div>
       )}
     </div>
@@ -121,24 +188,22 @@ function AskAIButton({ patient, blocker }: { patient: Patient; blocker: Blocker 
 
 function PatientRow({ patient, rank }: { patient: Patient; rank: number }) {
   const { selectPatient, beds } = useAppStore();
-  const [expanded, setExpanded] = useState(rank <= 3); // top 3 auto-expanded
+  const [expanded, setExpanded] = useState(rank <= 3);
 
   const bed = beds.find((b) => b.patientId === patient.id);
   const incompleteItems = patient.dischecklistItems.filter((i) => !i.completed).length;
   const totalItems = patient.dischecklistItems.length;
   const completedItems = totalItems - incompleteItems;
-
   const isReady = patient.blockers.length === 0 && incompleteItems === 0;
 
   return (
     <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-      {/* Row header — always visible */}
+      {/* Row header */}
       <div
         className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-50 transition-colors"
         onClick={() => setExpanded((v) => !v)}
       >
-        {/* Rank */}
-        <span className="text-sm font-bold text-slate-400 w-5 text-center flex-shrink-0">
+        <span className="text-sm font-bold text-slate-300 w-5 text-center flex-shrink-0">
           {rank}
         </span>
 
@@ -160,7 +225,7 @@ function PatientRow({ patient, rank }: { patient: Patient; rank: number }) {
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={(e) => { e.stopPropagation(); selectPatient(patient.id); }}
-              className="text-sm font-semibold text-slate-800 hover:text-teal-600 transition-colors truncate"
+              className="text-sm font-semibold text-slate-800 hover:text-teal-600 transition-colors"
             >
               {patient.name}
             </button>
@@ -174,7 +239,7 @@ function PatientRow({ patient, rank }: { patient: Patient; rank: number }) {
           </div>
         </div>
 
-        {/* Status summary */}
+        {/* Status */}
         <div className="flex items-center gap-2 flex-shrink-0">
           {isReady ? (
             <span className="flex items-center gap-1 text-[10px] text-green-600 font-semibold bg-green-50 px-2 py-0.5 rounded-full border border-green-200">
@@ -197,7 +262,7 @@ function PatientRow({ patient, rank }: { patient: Patient; rank: number }) {
         </div>
       </div>
 
-      {/* Expanded action items */}
+      {/* Expanded content */}
       {expanded && (
         <div className="px-4 pb-3 pt-1 border-t border-slate-100 bg-slate-50/60 space-y-2">
           {isReady && (
@@ -207,18 +272,18 @@ function PatientRow({ patient, rank }: { patient: Patient; rank: number }) {
             </div>
           )}
 
-          {/* Blockers */}
           {patient.blockers.map((b, i) => (
-            <div key={i} className="flex items-start gap-2 p-2 rounded bg-amber-50 border border-amber-200">
-              <span className="text-amber-500 mt-0.5">{blockerIcon(b.type)}</span>
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-medium text-slate-700">{b.description}</div>
-                {b.resolvable && <AskAIButton patient={patient} blocker={b} />}
+            <div key={i} className="p-2 rounded bg-amber-50 border border-amber-200">
+              <div className="flex items-start gap-2">
+                <span className="text-amber-500 mt-0.5">{blockerIcon(b.type)}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-medium text-slate-700">{b.description}</div>
+                  <ResolveButton patient={patient} blocker={b} />
+                </div>
               </div>
             </div>
           ))}
 
-          {/* Incomplete checklist items (top 3) */}
           {incompleteItems > 0 && (
             <div className="space-y-1">
               <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -250,17 +315,183 @@ function PatientRow({ patient, rank }: { patient: Patient; rank: number }) {
 }
 
 // ---------------------------------------------------------------------------
-// Lab priority queue (right panel)
+// Actionable lab priority queue
 // ---------------------------------------------------------------------------
 
 interface LabEntry {
   patient: Patient;
   room: string;
   lab: Lab;
+  isStatOverride?: boolean;   // nurse manually marked STAT
+  expedited?: boolean;
 }
 
-function LabPriorityQueue({ entries }: { entries: LabEntry[] }) {
+type LabAction = 'stat' | 'expedite';
+type LabActionState = 'idle' | 'loading' | 'done';
+
+function LabCard({
+  entry,
+  index,
+  total,
+  onMoveUp,
+  onMoveDown,
+  onMarkStat,
+  onExpedite,
+}: {
+  entry: LabEntry;
+  index: number;
+  total: number;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onMarkStat: () => void;
+  onExpedite: () => void;
+}) {
   const { selectPatient } = useAppStore();
+  const [actionState, setActionState] = useState<Record<LabAction, LabActionState>>({
+    stat: 'idle',
+    expedite: 'idle',
+  });
+
+  const triggerAction = async (action: LabAction, fn: () => void) => {
+    setActionState((s) => ({ ...s, [action]: 'loading' }));
+    await new Promise((r) => setTimeout(r, 600));
+    fn();
+    setActionState((s) => ({ ...s, [action]: 'done' }));
+  };
+
+  const isStat = entry.lab.status === 'stat' || entry.isStatOverride;
+  const isOverdue = (Date.now() - new Date(entry.lab.orderedAt).getTime()) / 3600000 >= 2;
+
+  return (
+    <div className={`rounded border p-2.5 ${
+      isStat ? 'bg-red-50 border-red-200'
+      : isOverdue ? 'bg-amber-50 border-amber-200'
+      : 'bg-white border-slate-200'
+    }`}>
+      <div className="flex items-start gap-1.5">
+        {/* Priority controls */}
+        <div className="flex flex-col gap-0.5 flex-shrink-0 mt-0.5">
+          <button
+            onClick={onMoveUp}
+            disabled={index === 0}
+            className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-20 transition-colors"
+            title="Increase priority"
+          >
+            <ArrowUp size={10} className="text-slate-500" />
+          </button>
+          <button
+            onClick={onMoveDown}
+            disabled={index === total - 1}
+            className="p-0.5 rounded hover:bg-slate-200 disabled:opacity-20 transition-colors"
+            title="Decrease priority"
+          >
+            <ArrowDown size={10} className="text-slate-500" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-1">
+            <div className="flex items-center gap-1.5 min-w-0">
+              {isStat && (
+                <span className="text-[8px] px-1.5 py-0.5 rounded bg-red-500 text-white font-bold uppercase tracking-wide flex-shrink-0">
+                  STAT
+                </span>
+              )}
+              <span className="text-xs font-semibold text-slate-800 truncate">{entry.lab.name}</span>
+            </div>
+            <div className={`text-[9px] font-bold flex-shrink-0 ${readinessClass(entry.patient.dischargeReadiness)}`}>
+              DC {entry.patient.dischargeReadiness}
+            </div>
+          </div>
+
+          <button
+            onClick={() => selectPatient(entry.patient.id)}
+            className="text-[10px] text-teal-600 hover:underline font-medium"
+          >
+            {entry.patient.name}
+          </button>
+          <span className="text-[10px] text-slate-400 ml-1">· {entry.room}</span>
+
+          <div className={`text-[10px] flex items-center gap-0.5 mt-0.5 ${labWaitClass(entry.lab.orderedAt)}`}>
+            Ordered {minutesAgo(entry.lab.orderedAt)}
+            {isOverdue && <span className="ml-1 font-semibold">· ⚠ Over 2hr TAT</span>}
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+            {!isStat && (
+              <button
+                onClick={() => triggerAction('stat', onMarkStat)}
+                disabled={actionState.stat !== 'idle'}
+                className={`flex items-center gap-1 text-[9px] px-2 py-0.5 rounded font-semibold transition-colors ${
+                  actionState.stat === 'done'
+                    ? 'bg-red-100 text-red-700 border border-red-300'
+                    : 'bg-white border border-red-300 text-red-600 hover:bg-red-50'
+                }`}
+              >
+                {actionState.stat === 'loading' && <Loader2 size={8} className="animate-spin" />}
+                {actionState.stat === 'done' ? '✓ Marked STAT' : 'Mark STAT'}
+              </button>
+            )}
+
+            {!entry.expedited && (
+              <button
+                onClick={() => triggerAction('expedite', onExpedite)}
+                disabled={actionState.expedite !== 'idle'}
+                className={`flex items-center gap-1 text-[9px] px-2 py-0.5 rounded font-semibold transition-colors ${
+                  actionState.expedite === 'done'
+                    ? 'bg-teal-100 text-teal-700 border border-teal-300'
+                    : 'bg-white border border-slate-300 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {actionState.expedite === 'loading' && <Loader2 size={8} className="animate-spin" />}
+                {actionState.expedite === 'done' ? '✓ Expedite sent' : 'Expedite'}
+              </button>
+            )}
+
+            {entry.expedited && (
+              <span className="text-[9px] text-teal-600 font-semibold">✓ Expedite requested</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LabPriorityQueue({ initialEntries }: { initialEntries: LabEntry[] }) {
+  const [entries, setEntries] = useState<LabEntry[]>(initialEntries);
+
+  const moveUp = (i: number) => {
+    if (i === 0) return;
+    setEntries((prev) => {
+      const next = [...prev];
+      [next[i - 1], next[i]] = [next[i], next[i - 1]];
+      return next;
+    });
+  };
+
+  const moveDown = (i: number) => {
+    setEntries((prev) => {
+      if (i === prev.length - 1) return prev;
+      const next = [...prev];
+      [next[i], next[i + 1]] = [next[i + 1], next[i]];
+      return next;
+    });
+  };
+
+  const markStat = (i: number) => {
+    setEntries((prev) =>
+      prev.map((e, idx) => idx === i ? { ...e, isStatOverride: true } : e)
+    );
+  };
+
+  const markExpedited = (i: number) => {
+    setEntries((prev) =>
+      prev.map((e, idx) => idx === i ? { ...e, expedited: true } : e)
+    );
+  };
 
   if (entries.length === 0) {
     return (
@@ -271,57 +502,29 @@ function LabPriorityQueue({ entries }: { entries: LabEntry[] }) {
     );
   }
 
+  const overdueCt = entries.filter(
+    (e) => (Date.now() - new Date(e.lab.orderedAt).getTime()) / 3600000 >= 2
+  ).length;
+
   return (
     <div className="space-y-1.5">
-      {entries.map((e, i) => {
-        const isOverdue = (Date.now() - new Date(e.lab.orderedAt).getTime()) / 3600000 >= 2;
-        return (
-          <div
-            key={i}
-            className={`rounded border p-2.5 ${
-              e.lab.status === 'stat'
-                ? 'bg-red-50 border-red-200'
-                : isOverdue
-                ? 'bg-amber-50 border-amber-200'
-                : 'bg-white border-slate-200'
-            }`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                  {e.lab.status === 'stat' && (
-                    <span className="text-[8px] px-1.5 py-0.5 rounded bg-red-500 text-white font-bold uppercase tracking-wide">
-                      STAT
-                    </span>
-                  )}
-                  {e.lab.name}
-                </div>
-                <button
-                  onClick={() => selectPatient(e.patient.id)}
-                  className="text-[10px] text-teal-600 hover:underline font-medium"
-                >
-                  {e.patient.name}
-                </button>
-                <span className="text-[10px] text-slate-400 ml-1">· {e.room}</span>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <div className={`text-[10px] flex items-center gap-0.5 ${labWaitClass(e.lab.orderedAt)}`}>
-                  <Clock size={9} />
-                  {minutesAgo(e.lab.orderedAt)}
-                </div>
-                <div className={`text-[9px] font-bold mt-0.5 ${readinessClass(e.patient.dischargeReadiness)}`}>
-                  DC {e.patient.dischargeReadiness}
-                </div>
-              </div>
-            </div>
-            {isOverdue && e.lab.status !== 'stat' && (
-              <div className="mt-1.5 text-[9px] text-amber-700 font-semibold">
-                ⚠ Over 2hr TAT target
-              </div>
-            )}
-          </div>
-        );
-      })}
+      {overdueCt > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded p-2 text-[10px] text-red-700 font-medium flex-shrink-0">
+          ⚠ {overdueCt} lab{overdueCt > 1 ? 's' : ''} exceed the 2hr TAT target
+        </div>
+      )}
+      {entries.map((e, i) => (
+        <LabCard
+          key={`${e.patient.id}-${e.lab.name}-${i}`}
+          entry={e}
+          index={i}
+          total={entries.length}
+          onMoveUp={() => moveUp(i)}
+          onMoveDown={() => moveDown(i)}
+          onMarkStat={() => markStat(i)}
+          onExpedite={() => markExpedited(i)}
+        />
+      ))}
     </div>
   );
 }
@@ -341,10 +544,9 @@ export default function WorklistTab() {
     );
   }
 
-  // Sort patients by discharge readiness descending
   const sorted = [...patients].sort((a, b) => b.dischargeReadiness - a.dischargeReadiness);
 
-  // Build lab priority queue: all pending/stat labs, sorted STAT first then by patient readiness desc
+  // Build initial lab queue: pending/stat labs sorted STAT first, then by patient readiness
   const labEntries: LabEntry[] = [];
   for (const patient of patients) {
     const bed = beds.find((b) => b.patientId === patient.id);
@@ -356,10 +558,8 @@ export default function WorklistTab() {
     }
   }
   labEntries.sort((a, b) => {
-    // STAT always first
     if (a.lab.status === 'stat' && b.lab.status !== 'stat') return -1;
     if (b.lab.status === 'stat' && a.lab.status !== 'stat') return 1;
-    // Then by patient discharge readiness desc (higher readiness = closer to discharge = more urgent to unblock)
     return b.patient.dischargeReadiness - a.patient.dischargeReadiness;
   });
 
@@ -370,7 +570,9 @@ export default function WorklistTab() {
         <div className="flex items-center justify-between flex-shrink-0">
           <div>
             <h2 className="text-sm font-bold text-slate-800">Patient Worklist</h2>
-            <p className="text-[11px] text-slate-400">Ordered by discharge readiness · {sorted.length} patients</p>
+            <p className="text-[11px] text-slate-400">
+              Ordered by discharge readiness · {sorted.length} patients
+            </p>
           </div>
           <div className="flex items-center gap-3 text-[10px] text-slate-500">
             <span className="flex items-center gap-1">
@@ -397,18 +599,10 @@ export default function WorklistTab() {
         <div className="flex-shrink-0">
           <h2 className="text-sm font-bold text-slate-800">Lab Priority Queue</h2>
           <p className="text-[11px] text-slate-400">
-            Pending labs blocking discharge · {labEntries.length} active
+            {labEntries.length} pending · use ↑↓ to reprioritize
           </p>
         </div>
-
-        {/* TAT warning if over target */}
-        {labEntries.some((e) => (Date.now() - new Date(e.lab.orderedAt).getTime()) / 3600000 >= 2) && (
-          <div className="bg-red-50 border border-red-200 rounded p-2 text-[10px] text-red-700 font-medium flex-shrink-0">
-            ⚠ Some labs exceed the 2hr TAT target. Consider escalating to lab.
-          </div>
-        )}
-
-        <LabPriorityQueue entries={labEntries} />
+        <LabPriorityQueue initialEntries={labEntries} />
       </div>
     </div>
   );
