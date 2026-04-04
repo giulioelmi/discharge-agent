@@ -32,9 +32,19 @@ function eddText(edd: string) {
 export default function MyPatients() {
   const { patients, beds, loading, selectPatient } = useAppStore();
 
+  const isFullyReady = (p: (typeof patients)[number]) =>
+    p.blockers.length === 0 &&
+    p.dischecklistItems.every((i) => i.completed) &&
+    !p.labs.some((l) => l.status === 'pending' || l.status === 'stat');
+
   const myPatients = patients
     .filter((p) => MY_PHYSICIANS.includes(p.physician))
-    .sort((a, b) => b.dischargeReadiness - a.dischargeReadiness);
+    .sort((a, b) => {
+      const ra = isFullyReady(a) ? 1 : 0;
+      const rb = isFullyReady(b) ? 1 : 0;
+      if (ra !== rb) return ra - rb; // ready goes last
+      return b.dischargeReadiness - a.dischargeReadiness;
+    });
 
   return (
     <>
@@ -62,10 +72,11 @@ export default function MyPatients() {
               const bed = beds.find((b) => b.patientId === patient.id);
               const completedItems = patient.dischecklistItems.filter((i) => i.completed).length;
               const totalItems = patient.dischecklistItems.length;
+              const ready = isFullyReady(patient);
               return (
                 <div
                   key={patient.id}
-                  className="bg-white border border-slate-200 rounded-lg p-3 hover:border-teal-300 transition-colors"
+                  className={`bg-white border border-slate-200 rounded-lg p-3 hover:border-teal-300 transition-colors ${ready ? 'opacity-60 grayscale' : ''}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">

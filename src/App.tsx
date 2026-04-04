@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AppProvider } from './store/useAppStore';
-import TopBar from './components/layout/TopBar';
+import TopBar, { DEPARTMENTS } from './components/layout/TopBar';
 import PatientPanel from './components/PatientPanel';
 import WorklistTab from './components/WorklistTab';
 import CapacityView from './components/CapacityView';
@@ -38,17 +38,18 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
 
 function AppShell() {
   const [tab, setTab] = useState<Tab>('worklist');
+  const [department, setDepartment] = useState(DEPARTMENTS[0]);
 
   return (
     <div className="flex flex-col h-screen bg-slate-100 overflow-hidden font-sans">
-      <TopBar />
+      <TopBar selectedDept={department} onDeptChange={setDepartment} />
       <TabBar active={tab} onChange={setTab} />
 
       {/* Tab content */}
       <div className="flex-1 overflow-hidden flex flex-col min-h-0">
         {tab === 'worklist'  && <WorklistTab />}
-        {tab === 'capacity'  && <CapacityView />}
-        {tab === 'beds'      && <BedBoard />}
+        {tab === 'capacity'  && <CapacityView department={department} />}
+        {tab === 'beds'      && <BedBoard department={department} />}
       </div>
 
       {/* Patient panel is global — floats over any tab */}

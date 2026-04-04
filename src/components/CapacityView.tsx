@@ -1,5 +1,6 @@
 import { BarChart2, Users, Stethoscope } from 'lucide-react';
 import MetricsBar from './MetricsBar';
+import type { Department } from './layout/TopBar';
 
 // Projected hourly bed availability for next 24h
 const HOURLY_DATA = [
@@ -76,14 +77,15 @@ const STAFFING = [
   { shift: 'Night (7p–7a)', rns: 4, target: 5, pcts: 1, targetPcts: 2 },
 ];
 
-export default function CapacityView() {
+export default function CapacityView({ department }: { department?: Department }) {
+  const deptLabel = department?.label ?? '4-North';
   return (
     <div className="flex-1 overflow-y-auto flex flex-col">
       <MetricsBar />
     <div className="p-4 space-y-6">
       <div>
         <h1 className="text-base font-bold text-slate-800 mb-1">Capacity Planning</h1>
-        <p className="text-xs text-slate-500">4-North · Updated as of 10:05 AM</p>
+        <p className="text-xs text-slate-500">{deptLabel} · Updated as of 10:05 AM</p>
       </div>
 
       {/* Projected Bed Availability Chart */}

@@ -67,6 +67,9 @@ function formatDate(iso: string) {
 // ---------------------------------------------------------------------------
 
 function BlockersSection({ patient }: { patient: Patient }) {
+  const { resolveBlocker } = useAppStore();
+  const [resolvingKey, setResolvingKey] = useState<string | null>(null);
+
   if (patient.blockers.length === 0) {
     return (
       <div className="flex items-center gap-2 text-green-600 text-xs py-1">
@@ -84,8 +87,21 @@ function BlockersSection({ patient }: { patient: Patient }) {
             <div className="text-xs font-medium text-slate-700 leading-tight">{b.description}</div>
           </div>
           {b.resolvable && (
-            <button className="flex-shrink-0 text-[10px] px-2 py-0.5 rounded border border-teal-400 text-teal-600 hover:bg-teal-50 font-medium transition-colors">
-              Resolve
+            <button
+              onClick={async () => {
+                const key = `${patient.id}:${i}`;
+                if (resolvingKey) return;
+                setResolvingKey(key);
+                try {
+                  await resolveBlocker(patient.id, b);
+                } finally {
+                  setResolvingKey(null);
+                }
+              }}
+              disabled={resolvingKey !== null}
+              className="flex-shrink-0 text-[10px] px-2 py-0.5 rounded border border-teal-400 text-teal-600 hover:bg-teal-50 font-medium transition-colors disabled:opacity-50"
+            >
+              {resolvingKey ? 'Resolving…' : 'Resolve'}
             </button>
           )}
         </div>
