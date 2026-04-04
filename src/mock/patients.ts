@@ -109,7 +109,7 @@ export const MOCK_PATIENTS: Patient[] = [
     age: 82,
     mrn: 'MRN-739204',
     bedId: 'bed-104',
-    unit: '4-North',
+    unit: 'ICU',
     physician: 'Dr. Sandra Obi',
     admitDate: addDays(today, -5),
     edd: addDays(today, -2), // OVERDUE

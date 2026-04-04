@@ -97,6 +97,44 @@ function autoCompleteChecklist(patient: Patient, count: number) {
   };
 }
 
+function completeChecklistForBlocker(patient: Patient, blocker: Blocker): { patient: Patient; completed: boolean } {
+  const bType = blocker.type;
+  const labelMatches = (label: string) => {
+    const l = label.toLowerCase();
+    switch (bType) {
+      case 'placement':
+        return l.includes('snf') || l.includes('placement');
+      case 'family':
+        return l.includes('family meeting');
+      case 'transport':
+        return l.includes('transport') || l.includes('ride');
+      case 'md-order':
+        return l.includes('discharge order') || l.includes('order');
+      case 'medication':
+        return l.includes('medication') || l.includes('reconciliation') || l.includes('med rec');
+      case 'lab-pending':
+        return l.includes('lab') || l.includes('labs');
+      default:
+        return false;
+    }
+  };
+
+  let completed = false;
+  const next = {
+    ...patient,
+    dischecklistItems: patient.dischecklistItems.map((it) => {
+      if (completed || it.completed) return it;
+      if (labelMatches(it.label)) {
+        completed = true;
+        return { ...it, completed: true };
+      }
+      return it;
+    }),
+  };
+
+  return { patient: next, completed };
+}
+
 function removeOneBlocker(patient: Patient, predicate: (b: Blocker) => boolean) {
   const idx = patient.blockers.findIndex(predicate);
   if (idx === -1) return patient;
@@ -189,7 +227,6 @@ function simulateTick() {
       const resolvedBlocker = p.blockers.find((b) => b.resolvable);
       if (!resolvedBlocker) return p;
       let next = removeOneBlocker(p, (b) => b === resolvedBlocker);
-      next = autoCompleteChecklist(next, 1 + Math.floor(Math.random() * 2));
       next = bumpReadiness(next, 4 + Math.floor(Math.random() * 5));
 
       addAlert({
@@ -241,8 +278,13 @@ export async function applyResolveOutcome(patientId: string, blocker: Blocker): 
         next = removeOneBlocker(next, (b) => b.type === blocker.type && b.description === blocker.description);
       }
 
-      // Automatically complete some checklist items to simulate downstream work being done.
-      next = autoCompleteChecklist(next, 1 + Math.floor(Math.random() * 2));
+      // Prefer completing the checklist item that corresponds to this blocker.
+      const res = completeChecklistForBlocker(next, blocker);
+      next = res.patient;
+      // If nothing matched, optionally complete at most 1 item to simulate downstream work.
+      if (!res.completed) {
+        next = autoCompleteChecklist(next, Math.random() < 0.5 ? 1 : 0);
+      }
 
       // Increase readiness a bit on resolve (but allow promotion to 100 if fully-ready now).
       next = bumpReadiness(next, 6 + Math.floor(Math.random() * 8));

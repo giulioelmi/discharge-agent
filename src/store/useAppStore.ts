@@ -163,13 +163,49 @@ function useAppStoreInternal(): AppContextType {
           ? p.blockers.filter((b) => !(b.type === blocker.type && b.description === blocker.description))
           : p.blockers;
 
-        // Complete up to 1 remaining checklist item to simulate downstream completion.
+        // Keep checklist in sync with the blocker being resolved (avoid completing unrelated items).
+        const bType = blocker.type;
+        const labelMatches = (label: string) => {
+          const l = label.toLowerCase();
+          switch (bType) {
+            case 'placement':
+              return l.includes('snf') || l.includes('placement');
+            case 'family':
+              return l.includes('family meeting');
+            case 'transport':
+              return l.includes('transport') || l.includes('ride');
+            case 'md-order':
+              return l.includes('discharge order') || l.includes('order');
+            case 'medication':
+              return l.includes('medication') || l.includes('reconciliation') || l.includes('med rec');
+            case 'lab-pending':
+              return l.includes('lab') || l.includes('labs');
+            default:
+              return false;
+          }
+        };
+
         let completedOne = false;
-        const nextItems = p.dischecklistItems.map((it) => {
+        let matchedSpecific = false;
+        let nextItems = p.dischecklistItems.map((it) => {
           if (completedOne || it.completed) return it;
-          completedOne = true;
-          return { ...it, completed: true };
+          if (labelMatches(it.label)) {
+            completedOne = true;
+            matchedSpecific = true;
+            return { ...it, completed: true };
+          }
+          return it;
         });
+
+        // Fallback: if nothing matched this blocker type, complete the next incomplete item (at most 1).
+        if (!matchedSpecific) {
+          completedOne = false;
+          nextItems = nextItems.map((it) => {
+            if (completedOne || it.completed) return it;
+            completedOne = true;
+            return { ...it, completed: true };
+          });
+        }
 
         const hasBlockers = nextBlockers.length > 0;
         const hasIncompleteChecklist = nextItems.some((i) => !i.completed);

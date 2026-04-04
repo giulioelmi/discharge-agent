@@ -1,5 +1,5 @@
 import { useAppStore } from '../store/useAppStore';
-import { CheckCircle, Bed, Clock, LogOut } from 'lucide-react';
+import { CheckCircle, Bed, LogOut } from 'lucide-react';
 
 export default function MetricsBar() {
   const { metrics, loading } = useAppStore();
@@ -14,12 +14,7 @@ export default function MetricsBar() {
     );
   }
 
-  const labColor =
-    metrics.avgLabTat > metrics.labTatTarget
-      ? 'text-red-600 font-semibold'
-      : metrics.avgLabTat < 90
-      ? 'text-green-600 font-semibold'
-      : 'text-amber-600 font-semibold';
+  // Lab TAT temporarily hidden.
 
   return (
     <div className="flex items-center gap-0 px-2 bg-slate-50 border-b border-slate-200 flex-shrink-0 overflow-x-auto">
@@ -43,14 +38,7 @@ export default function MetricsBar() {
         valueClass="text-slate-700"
       />
       <Divider />
-      <MetricTile
-        icon={<Clock size={13} className="text-purple-600" />}
-        label="Lab TAT"
-        value={`${metrics.avgLabTat} min`}
-        sub={`target ${metrics.labTatTarget} min`}
-        valueClass={labColor}
-      />
-      <Divider />
+      {/* Lab TAT temporarily hidden */}
       <MetricTile
         icon={<LogOut size={13} className="text-amber-600" />}
         label="Pending DC"

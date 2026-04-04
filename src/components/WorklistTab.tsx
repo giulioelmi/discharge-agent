@@ -492,7 +492,7 @@ function LabCard({
   );
 }
 
-function LabPriorityQueue({ initialEntries }: { initialEntries: LabEntry[] }) {
+export function LabPriorityQueue({ initialEntries }: { initialEntries: LabEntry[] }) {
   const [entries, setEntries] = useState<LabEntry[]>(initialEntries);
 
   const moveUp = (i: number) => {
@@ -636,16 +636,7 @@ export default function WorklistTab() {
         </div>
       </div>
 
-      {/* Right: lab priority queue */}
-      <div className="w-72 flex-shrink-0 flex flex-col gap-3 overflow-y-auto">
-        <div className="flex-shrink-0">
-          <h2 className="text-sm font-bold text-slate-800">Lab Priority Queue</h2>
-          <p className="text-[11px] text-slate-400">
-            {labEntries.length} pending · use ↑↓ to reprioritize
-          </p>
-        </div>
-        <LabPriorityQueue initialEntries={labEntries} />
-      </div>
+      {/* Right: lab priority queue (temporarily hidden) */}
     </div>
   );
 }
