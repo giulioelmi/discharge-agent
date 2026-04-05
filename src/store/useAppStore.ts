@@ -1,6 +1,25 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode, createElement } from 'react';
-import { Bed, Patient, Alert, DailyMetrics } from '../types';
-import { fetchBeds, fetchPatients, fetchAlerts, fetchMetrics, updateChecklist as apiUpdateChecklist, snoozeAlert as apiSnoozeAlert, updateEDD as apiUpdateEDD } from '../api/cerner';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  ReactNode,
+  createElement,
+} from 'react';
+import { Bed, Patient, Alert, DailyMetrics, Blocker } from '../types';
+import {
+  fetchBeds,
+  fetchPatients,
+  fetchAlerts,
+  fetchMetrics,
+  updateChecklist as apiUpdateChecklist,
+  snoozeAlert as apiSnoozeAlert,
+  updateEDD as apiUpdateEDD,
+  startMockCernerStream,
+  applyResolveOutcome,
+  expediteCleaning as apiExpediteCleaning,
+} from '../api/cerner';
 
 interface AppState {
   beds: Bed[];
@@ -17,6 +36,8 @@ interface AppActions {
   updateChecklist: (patientId: string, itemId: string, completed: boolean) => Promise<void>;
   snoozeAlert: (alertId: string) => Promise<void>;
   updateEDD: (patientId: string, edd: string) => Promise<void>;
+  resolveBlocker: (patientId: string, blocker: Blocker) => Promise<void>;
+  expediteCleaning: (bedId: string) => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -34,6 +55,8 @@ function useAppStoreInternal(): AppContextType {
     loading: true,
     error: null,
   });
+
+  const MOCK_MODE = import.meta.env.VITE_MOCK_MODE !== 'false';
 
   const loadAll = useCallback(async () => {
     setState((s) => ({ ...s, loading: true, error: null }));
@@ -54,9 +77,34 @@ function useAppStoreInternal(): AppContextType {
     }
   }, []);
 
+  // Silent sync (used for background polling so the UI looks “live”)
+  const syncAll = useCallback(async () => {
+    try {
+      const [beds, patients, alerts, metrics] = await Promise.all([
+        fetchBeds(),
+        fetchPatients(),
+        fetchAlerts(),
+        fetchMetrics(),
+      ]);
+      setState((s) => ({ ...s, beds, patients, alerts, metrics }));
+    } catch {
+      // ignore transient sync errors
+    }
+  }, []);
+
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  // In mock mode, start the simulated stream and poll quietly.
+  useEffect(() => {
+    if (!MOCK_MODE) return;
+    startMockCernerStream();
+    const id = window.setInterval(() => {
+      syncAll();
+    }, 2500);
+    return () => window.clearInterval(id);
+  }, [MOCK_MODE, syncAll]);
 
   const selectPatient = useCallback((id: string | null) => {
     setState((s) => ({ ...s, selectedPatientId: id }));
@@ -69,11 +117,18 @@ function useAppStoreInternal(): AppContextType {
         ...s,
         patients: s.patients.map((p) => {
           if (p.id !== patientId) return p;
+          const nextItems = p.dischecklistItems.map((item) =>
+            item.id === itemId ? { ...item, completed } : item
+          );
+          const hasBlockers = p.blockers.length > 0;
+          const hasIncompleteChecklist = nextItems.some((i) => !i.completed);
+          const hasPendingLabs = p.labs.some((l) => l.status === 'pending' || l.status === 'stat');
+          const fullyReady = !hasBlockers && !hasIncompleteChecklist && !hasPendingLabs;
+
           return {
             ...p,
-            dischecklistItems: p.dischecklistItems.map((item) =>
-              item.id === itemId ? { ...item, completed } : item
-            ),
+            dischecklistItems: nextItems,
+            dischargeReadiness: fullyReady ? 100 : Math.min(p.dischargeReadiness, 99),
           };
         }),
       }));
@@ -98,12 +153,113 @@ function useAppStoreInternal(): AppContextType {
     await apiUpdateEDD(patientId, edd);
   }, []);
 
+  const resolveBlocker = useCallback(async (patientId: string, blocker: Blocker) => {
+    // Optimistic: bump readiness and (if resolvable) remove the blocker + auto-complete some checklist
+    setState((s) => ({
+      ...s,
+      patients: s.patients.map((p) => {
+        if (p.id !== patientId) return p;
+        const nextBlockers = blocker.resolvable
+          ? p.blockers.filter((b) => !(b.type === blocker.type && b.description === blocker.description))
+          : p.blockers;
+
+        // Keep checklist in sync with the blocker being resolved (avoid completing unrelated items).
+        const bType = blocker.type;
+        const labelMatches = (label: string) => {
+          const l = label.toLowerCase();
+          switch (bType) {
+            case 'placement':
+              return l.includes('snf') || l.includes('placement');
+            case 'family':
+              return l.includes('family meeting');
+            case 'transport':
+              return l.includes('transport') || l.includes('ride');
+            case 'md-order':
+              return l.includes('discharge order') || l.includes('order');
+            case 'medication':
+              return l.includes('medication') || l.includes('reconciliation') || l.includes('med rec');
+            case 'lab-pending':
+              return l.includes('lab') || l.includes('labs');
+            default:
+              return false;
+          }
+        };
+
+        let completedOne = false;
+        let matchedSpecific = false;
+        let nextItems = p.dischecklistItems.map((it) => {
+          if (completedOne || it.completed) return it;
+          if (labelMatches(it.label)) {
+            completedOne = true;
+            matchedSpecific = true;
+            return { ...it, completed: true };
+          }
+          return it;
+        });
+
+        // Fallback: if nothing matched this blocker type, complete the next incomplete item (at most 1).
+        if (!matchedSpecific) {
+          completedOne = false;
+          nextItems = nextItems.map((it) => {
+            if (completedOne || it.completed) return it;
+            completedOne = true;
+            return { ...it, completed: true };
+          });
+        }
+
+        const hasBlockers = nextBlockers.length > 0;
+        const hasIncompleteChecklist = nextItems.some((i) => !i.completed);
+        const hasPendingLabs = p.labs.some((l) => l.status === 'pending' || l.status === 'stat');
+        const fullyReady = !hasBlockers && !hasIncompleteChecklist && !hasPendingLabs;
+        const nextReadiness = fullyReady
+          ? 100
+          : Math.min(99, p.dischargeReadiness + 8);
+
+        return {
+          ...p,
+          dischargeReadiness: nextReadiness,
+          blockers: nextBlockers,
+          dischecklistItems: nextItems,
+        };
+      }),
+    }));
+
+    await applyResolveOutcome(patientId, blocker);
+    // Pull fresh data so the UI reflects the same source of truth as other tabs.
+    syncAll();
+  }, [syncAll]);
+
+  const expediteCleaning = useCallback(
+    async (bedId: string) => {
+      // Optimistic: free the bed immediately and remove the discharged patient.
+      setState((s) => {
+        const bed = s.beds.find((b) => b.id === bedId);
+        const dischargedPatientId = bed?.patientId;
+        return {
+          ...s,
+          beds: s.beds.map((b) =>
+            b.id === bedId ? { ...b, status: 'available', patientId: undefined } : b
+          ),
+          patients: dischargedPatientId
+            ? s.patients.filter((p) => p.id !== dischargedPatientId)
+            : s.patients,
+        };
+      });
+
+      await apiExpediteCleaning(bedId);
+      syncAll();
+    },
+    [syncAll]
+  );
+
   return {
     ...state,
     selectPatient,
     updateChecklist: updateChecklistItem,
     snoozeAlert: snoozeAlertItem,
     updateEDD: updatePatientEDD,
+    resolveBlocker,
+    expediteCleaning,
     refresh: loadAll,
   };
 }

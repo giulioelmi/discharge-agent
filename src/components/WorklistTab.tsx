@@ -128,6 +128,7 @@ function ResolveButton({ patient, blocker }: { patient: Patient; blocker: Blocke
   const [state, setState] = useState<ResolveState>('idle');
   const [result, setResult] = useState<string | null>(null);
   const mode = resolveMode(blocker);
+  const { resolveBlocker } = useAppStore();
 
   const handleResolve = async () => {
     if (state === 'done') { setState('idle'); setResult(null); return; }
@@ -138,6 +139,8 @@ function ResolveButton({ patient, blocker }: { patient: Patient; blocker: Blocke
       : agentAdvisoryPrompt(patient, blocker);
     const res = await askAgent(patient, prompt);
     setResult(res);
+    // Make it feel “live”: readiness bumps and some tasks auto-complete.
+    await resolveBlocker(patient.id, blocker);
     setState('done');
   };
 
@@ -187,17 +190,32 @@ function ResolveButton({ patient, blocker }: { patient: Patient; blocker: Blocke
 // ---------------------------------------------------------------------------
 
 function PatientRow({ patient, rank }: { patient: Patient; rank: number }) {
-  const { selectPatient, beds } = useAppStore();
+  const { selectPatient, beds, expediteCleaning } = useAppStore();
   const [expanded, setExpanded] = useState(rank <= 3);
+  const [expediting, setExpediting] = useState(false);
 
   const bed = beds.find((b) => b.patientId === patient.id);
   const incompleteItems = patient.dischecklistItems.filter((i) => !i.completed).length;
   const totalItems = patient.dischecklistItems.length;
   const completedItems = totalItems - incompleteItems;
-  const isReady = patient.blockers.length === 0 && incompleteItems === 0;
+  const hasPendingLabs = patient.labs.some((l) => l.status === 'pending' || l.status === 'stat');
+  const isReady = patient.blockers.length === 0 && incompleteItems === 0 && !hasPendingLabs;
+  const isDischarged = isReady && patient.dischargeReadiness === 100;
+
+  const handleExpediteCleaning = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!bed?.id) return;
+    if (expediting) return;
+    setExpediting(true);
+    try {
+      await expediteCleaning(bed.id);
+    } finally {
+      setExpediting(false);
+    }
+  };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+    <div className={`bg-white border border-slate-200 rounded-lg overflow-hidden ${isReady ? 'opacity-60 grayscale' : ''}`}>
       {/* Row header */}
       <div
         className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-50 transition-colors"
@@ -241,7 +259,21 @@ function PatientRow({ patient, rank }: { patient: Patient; rank: number }) {
 
         {/* Status */}
         <div className="flex items-center gap-2 flex-shrink-0">
-          {isReady ? (
+          {isDischarged ? (
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1 text-[10px] text-slate-600 font-semibold bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                Cleaning
+              </span>
+              <button
+                type="button"
+                onClick={handleExpediteCleaning}
+                disabled={!bed?.id || expediting}
+                className="text-[10px] px-2 py-0.5 rounded border border-slate-300 text-slate-700 hover:bg-white disabled:opacity-60"
+              >
+                {expediting ? 'Expediting…' : 'Expedite'}
+              </button>
+            </div>
+          ) : isReady ? (
             <span className="flex items-center gap-1 text-[10px] text-green-600 font-semibold bg-green-50 px-2 py-0.5 rounded-full border border-green-200">
               <CheckCircle2 size={10} /> Ready
             </span>
@@ -460,7 +492,7 @@ function LabCard({
   );
 }
 
-function LabPriorityQueue({ initialEntries }: { initialEntries: LabEntry[] }) {
+export function LabPriorityQueue({ initialEntries }: { initialEntries: LabEntry[] }) {
   const [entries, setEntries] = useState<LabEntry[]>(initialEntries);
 
   const moveUp = (i: number) => {
@@ -544,7 +576,17 @@ export default function WorklistTab() {
     );
   }
 
-  const sorted = [...patients].sort((a, b) => b.dischargeReadiness - a.dischargeReadiness);
+  const isFullyReady = (p: Patient) =>
+    p.blockers.length === 0 &&
+    p.dischecklistItems.every((i) => i.completed) &&
+    !p.labs.some((l) => l.status === 'pending' || l.status === 'stat');
+
+  const sorted = [...patients].sort((a, b) => {
+    const ra = isFullyReady(a) ? 1 : 0;
+    const rb = isFullyReady(b) ? 1 : 0;
+    if (ra !== rb) return ra - rb; // ready goes last
+    return b.dischargeReadiness - a.dischargeReadiness;
+  });
 
   // Build initial lab queue: pending/stat labs sorted STAT first, then by patient readiness
   const labEntries: LabEntry[] = [];
@@ -594,16 +636,7 @@ export default function WorklistTab() {
         </div>
       </div>
 
-      {/* Right: lab priority queue */}
-      <div className="w-72 flex-shrink-0 flex flex-col gap-3 overflow-y-auto">
-        <div className="flex-shrink-0">
-          <h2 className="text-sm font-bold text-slate-800">Lab Priority Queue</h2>
-          <p className="text-[11px] text-slate-400">
-            {labEntries.length} pending · use ↑↓ to reprioritize
-          </p>
-        </div>
-        <LabPriorityQueue initialEntries={labEntries} />
-      </div>
+      {/* Right: lab priority queue (temporarily hidden) */}
     </div>
   );
 }

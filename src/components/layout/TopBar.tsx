@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Bell, RefreshCw, ChevronDown, Check } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 
-const DEPARTMENTS = [
+export const DEPARTMENTS = [
   { id: 'icu',      label: 'ICU',              sub: 'Intensive Care Unit' },
   { id: '4-north',  label: '4-North',          sub: 'Medical/Surgical' },
   { id: '3-south',  label: '3-South',          sub: 'Medical/Surgical' },
@@ -12,11 +12,18 @@ const DEPARTMENTS = [
   { id: 'ccu',      label: 'Cardiac Care',     sub: 'Cardiac Care Unit' },
 ];
 
-export default function TopBar() {
+export type Department = (typeof DEPARTMENTS)[number];
+
+export default function TopBar({
+  selectedDept,
+  onDeptChange,
+}: {
+  selectedDept: Department;
+  onDeptChange: (dept: Department) => void;
+}) {
   const { alerts, refresh, loading } = useAppStore();
   const [now, setNow] = useState(new Date());
   const [deptOpen, setDeptOpen] = useState(false);
-  const [selectedDept, setSelectedDept] = useState(DEPARTMENTS[0]); // ICU default
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -73,7 +80,7 @@ export default function TopBar() {
             {DEPARTMENTS.map((dept) => (
               <button
                 key={dept.id}
-                onClick={() => { setSelectedDept(dept); setDeptOpen(false); }}
+                onClick={() => { onDeptChange(dept); setDeptOpen(false); }}
                 className="flex items-center justify-between w-full px-3 py-2 hover:bg-slate-50 transition-colors text-left"
               >
                 <div>

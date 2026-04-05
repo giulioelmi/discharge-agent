@@ -2,6 +2,8 @@ import { Bed, Patient, BedStatus } from '../types';
 import { useAppStore } from '../store/useAppStore';
 import { Loader2 } from 'lucide-react';
 import MetricsBar from './MetricsBar';
+import { MouseEvent, useState } from 'react';
+import type { Department } from './layout/TopBar';
 
 function bedStatusStyle(status: BedStatus) {
   switch (status) {
@@ -70,16 +72,31 @@ function formatEDD(edd: string) {
 }
 
 function BedCard({ bed, patient }: { bed: Bed; patient?: Patient }) {
-  const { selectPatient } = useAppStore();
+  const { selectPatient, expediteCleaning } = useAppStore();
+  const [expediting, setExpediting] = useState(false);
 
   const handleClick = () => {
     if (patient) selectPatient(patient.id);
   };
 
+  const isCleaning = bed.status === 'cleaning';
+  const mutedClass = isCleaning ? 'opacity-60 grayscale' : '';
+
+  const handleExpedite = async (e: MouseEvent<HTMLElement>) => {
+    e.stopPropagation();
+    if (expediting) return;
+    setExpediting(true);
+    try {
+      await expediteCleaning(bed.id);
+    } finally {
+      setExpediting(false);
+    }
+  };
+
   if (!patient) {
     return (
       <div
-        className={`border-l-4 rounded p-2 min-h-[90px] flex flex-col justify-between ${bedStatusStyle(bed.status)}`}
+        className={`border-l-4 rounded p-2 min-h-[90px] flex flex-col justify-between ${bedStatusStyle(bed.status)} ${mutedClass}`}
       >
         <div className="flex items-center justify-between mb-1">
           <span className="text-xs font-bold text-slate-700">{bed.room}</span>
@@ -90,6 +107,16 @@ function BedCard({ bed, patient }: { bed: Bed; patient?: Patient }) {
         <div className="flex-1 flex items-center justify-center">
           <span className="text-xs text-slate-400 italic">{bedStatusLabel(bed.status)}</span>
         </div>
+        {isCleaning && (
+          <button
+            type="button"
+            onClick={handleExpedite}
+            disabled={expediting}
+            className="mt-1 text-[10px] px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-white disabled:opacity-60"
+          >
+            {expediting ? 'Expediting…' : 'Expedite cleaning'}
+          </button>
+        )}
       </div>
     );
   }
@@ -97,9 +124,14 @@ function BedCard({ bed, patient }: { bed: Bed; patient?: Patient }) {
   const { color, textColor } = readinessBar(patient.dischargeReadiness);
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={handleClick}
-      className={`border-l-4 rounded p-2 min-h-[90px] flex flex-col text-left w-full transition-shadow hover:shadow-md cursor-pointer ${bedStatusStyle(bed.status)}`}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') handleClick();
+      }}
+      className={`border-l-4 rounded p-2 min-h-[90px] flex flex-col text-left w-full transition-shadow hover:shadow-md cursor-pointer ${bedStatusStyle(bed.status)} ${mutedClass}`}
     >
       <div className="flex items-center justify-between mb-1">
         <span className="text-xs font-bold text-slate-700">{bed.room}</span>
@@ -129,12 +161,25 @@ function BedCard({ bed, patient }: { bed: Bed; patient?: Patient }) {
           </div>
         </div>
       </div>
-    </button>
+
+      {isCleaning && (
+        <button
+          type="button"
+          onClick={handleExpedite}
+          disabled={expediting}
+          className="mt-1 text-[10px] px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-white disabled:opacity-60"
+        >
+          {expediting ? 'Expediting…' : 'Expedite cleaning'}
+        </button>
+      )}
+    </div>
   );
 }
 
-export default function BedBoard() {
+export default function BedBoard({ department }: { department?: Department }) {
+  const deptLabel = department?.label ?? '4-North';
   const { beds, patients, loading } = useAppStore();
+  const [filter, setFilter] = useState<BedStatus | null>(null);
 
   const patientMap = Object.fromEntries(patients.map((p) => [p.id, p]));
 
@@ -146,31 +191,50 @@ export default function BedBoard() {
     );
   }
 
+  const legendItems: Array<{ label: string; status: BedStatus; dotClass: string }> = [
+    { label: 'Available', status: 'available', dotClass: 'bg-green-400' },
+    { label: 'DC Ready', status: 'discharge-ready', dotClass: 'bg-teal-500' },
+    { label: 'Pending DC', status: 'pending-discharge', dotClass: 'bg-amber-500' },
+    { label: 'Blocked', status: 'blocked', dotClass: 'bg-red-500' },
+  ];
+
+  const filteredBeds = filter ? beds.filter((b) => b.status === filter) : beds;
+  const sortedBeds = [...filteredBeds].sort((a, b) => {
+    const aIsCleaning = a.status === 'cleaning' ? 1 : 0;
+    const bIsCleaning = b.status === 'cleaning' ? 1 : 0;
+    return aIsCleaning - bIsCleaning;
+  });
+
   return (
     <div className="flex-1 overflow-y-auto flex flex-col">
       <MetricsBar />
     <div className="p-3">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-          Bed Board — 4-North ({beds.length} beds)
+          Bed Board — {deptLabel} ({filteredBeds.length} beds)
         </h2>
         <div className="flex items-center gap-2 text-[10px] text-slate-500">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-green-400 inline-block" />Available
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-teal-500 inline-block" />DC Ready
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />Pending DC
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />Blocked
-          </span>
+          {legendItems.map((it) => {
+            const active = filter === it.status;
+            return (
+              <button
+                key={it.status}
+                type="button"
+                onClick={() => setFilter((cur) => (cur === it.status ? null : it.status))}
+                className={`flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors hover:bg-slate-100 ${
+                  active ? 'bg-slate-200 text-slate-700 font-semibold' : ''
+                }`}
+                title={active ? 'Clear filter' : `Filter: ${it.label}`}
+              >
+                <span className={`w-2 h-2 rounded-full inline-block ${it.dotClass}`} />
+                {it.label}
+              </button>
+            );
+          })}
         </div>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
-        {beds.map((bed) => (
+        {sortedBeds.map((bed) => (
           <BedCard
             key={bed.id}
             bed={bed}

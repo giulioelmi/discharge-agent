@@ -50,9 +50,19 @@ function getRoomForPatient(patientId: string, beds: ReturnType<typeof useAppStor
 }
 
 export default function DischargeQueue() {
-  const { patients, beds, loading, selectPatient } = useAppStore();
+  const { patients, beds, loading, selectPatient, expediteCleaning } = useAppStore();
 
-  const sorted = [...patients].sort((a, b) => b.dischargeReadiness - a.dischargeReadiness);
+  const isFullyReady = (p: Patient) =>
+    p.blockers.length === 0 &&
+    p.dischecklistItems.every((i) => i.completed) &&
+    !p.labs.some((l) => l.status === 'pending' || l.status === 'stat');
+
+  const sorted = [...patients].sort((a, b) => {
+    const ra = isFullyReady(a) ? 1 : 0;
+    const rb = isFullyReady(b) ? 1 : 0;
+    if (ra !== rb) return ra - rb; // ready goes last
+    return b.dischargeReadiness - a.dischargeReadiness;
+  });
 
   return (
     <div className="w-64 xl:w-72 flex flex-col border-l border-slate-200 bg-white flex-shrink-0">
@@ -76,10 +86,13 @@ export default function DischargeQueue() {
         ) : (
           sorted.map((patient) => {
             const room = getRoomForPatient(patient.id, beds);
+            const ready = isFullyReady(patient);
+            const bed = beds.find((b) => b.patientId === patient.id);
+            const discharged = ready && patient.dischargeReadiness === 100;
             return (
               <div
                 key={patient.id}
-                className="flex flex-col gap-1.5 px-3 py-2.5 border-b border-slate-100 hover:bg-slate-50 transition-colors"
+                className={`flex flex-col gap-1.5 px-3 py-2.5 border-b border-slate-100 hover:bg-slate-50 transition-colors ${ready ? 'opacity-60 grayscale' : ''}`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -99,6 +112,22 @@ export default function DischargeQueue() {
                     {blockerTag(patient)}
                   </div>
                 </div>
+
+                {discharged && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                      Cleaning
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => bed?.id && expediteCleaning(bed.id)}
+                      disabled={!bed?.id}
+                      className="text-[10px] px-2 py-0.5 rounded border border-slate-300 text-slate-700 hover:bg-white disabled:opacity-60"
+                    >
+                      Expedite
+                    </button>
+                  </div>
+                )}
 
                 <button
                   onClick={() => selectPatient(patient.id)}
