@@ -171,7 +171,7 @@ export default function CapacityView({ department }: { department?: Department }
   const [showIncoming, setShowIncoming] = useState(true);
   return (
     <div className="flex-1 overflow-y-auto flex flex-col">
-      <MetricsBar />
+      <MetricsBar department={department} />
     <div className="p-4 space-y-6">
       <div>
         <h1 className="text-base font-bold text-slate-800 mb-1">Capacity Planning</h1>

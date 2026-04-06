@@ -2,7 +2,8 @@ import { useState } from 'react';
 import {
   X, FlaskConical, CheckSquare, AlertTriangle, Clock,
   Truck, ClipboardList, Users, Package, Pill, Ban,
-  ChevronDown, ChevronUp, Edit3, Check,
+  ChevronDown, ChevronUp, Edit3, Check, CheckCircle2, Circle,
+  ExternalLink,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { Blocker, ChecklistItem, Lab, Patient } from '../types';
@@ -80,38 +81,99 @@ function BlockersSection({ patient }: { patient: Patient }) {
   }
   return (
     <div className="space-y-1.5">
-      {patient.blockers.map((b, i) => (
-        <div key={i} className="flex items-start gap-2 p-2 rounded bg-amber-50 border border-amber-200">
-          <span className="text-amber-600 mt-0.5">{blockerIcon(b.type)}</span>
-          <div className="flex-1 min-w-0">
-            <div className="text-xs font-medium text-slate-700 leading-tight">{b.description}</div>
+      {patient.blockers.map((b, i) => {
+        const appShortcut = BLOCKER_APP[b.type];
+        return (
+          <div key={i} className="p-2 rounded bg-amber-50 border border-amber-200">
+            <div className="flex items-start gap-2">
+              <span className="text-amber-600 mt-0.5">{blockerIcon(b.type)}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium text-slate-700 leading-tight mb-1.5">{b.description}</div>
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  {appShortcut && <AppShortcutButton shortcut={appShortcut} />}
+                  {b.resolvable && (
+                    <button
+                      onClick={async () => {
+                        const key = `${patient.id}:${i}`;
+                        if (resolvingKey) return;
+                        setResolvingKey(key);
+                        try {
+                          await resolveBlocker(patient.id, b);
+                        } finally {
+                          setResolvingKey(null);
+                        }
+                      }}
+                      disabled={resolvingKey !== null}
+                      className="flex-shrink-0 text-[10px] px-2 py-0.5 rounded border border-teal-400 text-teal-600 hover:bg-teal-50 font-medium transition-colors disabled:opacity-50"
+                    >
+                      {resolvingKey ? 'Resolving…' : 'Ask agent'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
-          {b.resolvable && (
-            <button
-              onClick={async () => {
-                const key = `${patient.id}:${i}`;
-                if (resolvingKey) return;
-                setResolvingKey(key);
-                try {
-                  await resolveBlocker(patient.id, b);
-                } finally {
-                  setResolvingKey(null);
-                }
-              }}
-              disabled={resolvingKey !== null}
-              className="flex-shrink-0 text-[10px] px-2 py-0.5 rounded border border-teal-400 text-teal-600 hover:bg-teal-50 font-medium transition-colors disabled:opacity-50"
-            >
-              {resolvingKey ? 'Resolving…' : 'Resolve'}
-            </button>
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
 
+// App shortcuts mirrored from WorklistTab (for blocker cards in PatientPanel)
+interface AppShortcut {
+  name: string;
+  abbr: string;
+  bg: string;
+  text: string;
+  href: string;
+  tooltip: string;
+}
+
+const BLOCKER_APP: Partial<Record<Blocker['type'], AppShortcut>> = {
+  'md-order': {
+    name: 'PowerChart',
+    abbr: 'PC',
+    bg: 'bg-[#0077B6]',
+    text: 'text-white',
+    href: 'powerchart://',
+    tooltip: 'Open PowerChart to write or co-sign the discharge order',
+  },
+  'medication': {
+    name: 'PharmNet',
+    abbr: 'Rx',
+    bg: 'bg-[#6A0DAD]',
+    text: 'text-white',
+    href: 'pharmnet://',
+    tooltip: 'Open PharmNet to complete medication reconciliation',
+  },
+  'placement': {
+    name: 'Care Mgmt',
+    abbr: 'CM',
+    bg: 'bg-[#2E7D32]',
+    text: 'text-white',
+    href: '#',
+    tooltip: 'Open Care Management to search for placement options',
+  },
+};
+
+function AppShortcutButton({ shortcut }: { shortcut: AppShortcut }) {
+  return (
+    <a
+      href={shortcut.href}
+      onClick={(e) => e.preventDefault()}
+      title={shortcut.tooltip}
+      className={`inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded font-semibold transition-opacity hover:opacity-80 ${shortcut.bg} ${shortcut.text}`}
+    >
+      <span className="inline-flex items-center justify-center w-4 h-4 bg-white/20 rounded-sm text-[9px] font-bold flex-shrink-0">
+        {shortcut.abbr}
+      </span>
+      Open {shortcut.name}
+      <ExternalLink size={8} className="flex-shrink-0 opacity-70" />
+    </a>
+  );
+}
+
 function ChecklistSection({ patient }: { patient: Patient }) {
-  const { updateChecklist } = useAppStore();
   const items = patient.dischecklistItems;
   const completed = items.filter((i) => i.completed).length;
   const pct = items.length > 0 ? Math.round((completed / items.length) * 100) : 0;
@@ -127,9 +189,14 @@ function ChecklistSection({ patient }: { patient: Patient }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] text-slate-500 font-medium">
-          {completed}/{items.length} complete
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-slate-500 font-medium">
+            {completed}/{items.length} complete
+          </span>
+          <span className="text-[9px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+            Auto-synced from Cerner
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           <div className="w-24 h-1.5 bg-slate-200 rounded-full overflow-hidden">
             <div
@@ -150,24 +217,23 @@ function ChecklistSection({ patient }: { patient: Patient }) {
             </div>
             <div className="space-y-1">
               {catItems.map((item) => (
-                <label
+                <div
                   key={item.id}
-                  className="flex items-start gap-2 cursor-pointer group"
+                  className="flex items-start gap-2"
                 >
-                  <input
-                    type="checkbox"
-                    checked={item.completed}
-                    onChange={(e) => updateChecklist(patient.id, item.id, e.target.checked)}
-                    className="mt-0.5 w-3 h-3 rounded border-slate-300 text-teal-600 accent-teal-600 flex-shrink-0"
-                  />
+                  {item.completed ? (
+                    <CheckCircle2 size={13} className="text-teal-500 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <Circle size={13} className="text-slate-300 flex-shrink-0 mt-0.5" />
+                  )}
                   <span
                     className={`text-xs leading-tight ${
-                      item.completed ? 'line-through text-slate-400' : 'text-slate-700 group-hover:text-slate-900'
+                      item.completed ? 'line-through text-slate-400' : 'text-slate-700'
                     }`}
                   >
                     {item.label}
                   </span>
-                </label>
+                </div>
               ))}
             </div>
           </div>

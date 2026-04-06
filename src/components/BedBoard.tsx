@@ -198,7 +198,11 @@ export default function BedBoard({ department }: { department?: Department }) {
     { label: 'Blocked', status: 'blocked', dotClass: 'bg-red-500' },
   ];
 
-  const filteredBeds = filter ? beds.filter((b) => b.status === filter) : beds;
+  // Filter to current department first, then by status
+  const deptBeds = department
+    ? beds.filter((b) => b.unit === department.label)
+    : beds;
+  const filteredBeds = filter ? deptBeds.filter((b) => b.status === filter) : deptBeds;
   const sortedBeds = [...filteredBeds].sort((a, b) => {
     const aIsCleaning = a.status === 'cleaning' ? 1 : 0;
     const bIsCleaning = b.status === 'cleaning' ? 1 : 0;
@@ -207,7 +211,7 @@ export default function BedBoard({ department }: { department?: Department }) {
 
   return (
     <div className="flex-1 overflow-y-auto flex flex-col">
-      <MetricsBar />
+      <MetricsBar department={department} />
     <div className="p-3">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xs font-bold text-slate-600 uppercase tracking-wider">

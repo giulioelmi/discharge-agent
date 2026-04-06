@@ -47,7 +47,7 @@ function AppShell() {
 
       {/* Tab content */}
       <div className="flex-1 overflow-hidden flex flex-col min-h-0">
-        {tab === 'worklist'  && <WorklistTab />}
+        {tab === 'worklist'  && <WorklistTab department={department} />}
         {tab === 'capacity'  && <CapacityView department={department} />}
         {tab === 'beds'      && <BedBoard department={department} />}
       </div>
