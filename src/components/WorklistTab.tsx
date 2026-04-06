@@ -2,11 +2,12 @@ import { useState } from 'react';
 import {
   FlaskConical, Truck, ClipboardList, Users, Package, Pill,
   ChevronDown, ChevronUp, CheckCircle2, Loader2,
-  ArrowUp, ArrowDown, Zap, CheckCheck,
+  ArrowUp, ArrowDown, Zap, CheckCheck, ExternalLink,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { Blocker, Lab, Patient } from '../types';
 import { askAgent } from '../api/agent';
+import type { Department } from './layout/TopBar';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -70,6 +71,63 @@ function labWaitClass(iso: string) {
   if (hrs >= 2) return 'text-red-600 font-semibold';
   if (hrs >= 1) return 'text-amber-600';
   return 'text-slate-500';
+}
+
+// ---------------------------------------------------------------------------
+// App shortcuts — shown on blocker cards when an EHR app is the best next step
+// ---------------------------------------------------------------------------
+
+interface AppShortcut {
+  name: string;
+  abbr: string;   // 2-3 char abbreviation shown in the icon
+  bg: string;     // Tailwind bg colour
+  text: string;   // Tailwind text colour
+  href: string;   // Deep-link (powerchart://, etc.) or '#' for demo
+  tooltip: string;
+}
+
+const BLOCKER_APP: Partial<Record<Blocker['type'], AppShortcut>> = {
+  'md-order': {
+    name: 'PowerChart',
+    abbr: 'PC',
+    bg: 'bg-[#0077B6]',
+    text: 'text-white',
+    href: 'powerchart://',
+    tooltip: 'Open PowerChart to write or co-sign the discharge order',
+  },
+  'medication': {
+    name: 'PharmNet',
+    abbr: 'Rx',
+    bg: 'bg-[#6A0DAD]',
+    text: 'text-white',
+    href: 'pharmnet://',
+    tooltip: 'Open PharmNet to complete medication reconciliation',
+  },
+  'placement': {
+    name: 'Care Mgmt',
+    abbr: 'CM',
+    bg: 'bg-[#2E7D32]',
+    text: 'text-white',
+    href: '#',
+    tooltip: 'Open Care Management to search for placement options',
+  },
+};
+
+function AppShortcutButton({ shortcut }: { shortcut: AppShortcut }) {
+  return (
+    <a
+      href={shortcut.href}
+      onClick={(e) => e.preventDefault()}   // demo: prevent navigation
+      title={shortcut.tooltip}
+      className={`inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded font-semibold transition-opacity hover:opacity-80 ${shortcut.bg} ${shortcut.text}`}
+    >
+      <span className="inline-flex items-center justify-center w-4 h-4 bg-white/20 rounded-sm text-[9px] font-bold flex-shrink-0">
+        {shortcut.abbr}
+      </span>
+      Open {shortcut.name}
+      <ExternalLink size={8} className="flex-shrink-0 opacity-70" />
+    </a>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -144,43 +202,53 @@ function ResolveButton({ patient, blocker }: { patient: Patient; blocker: Blocke
     setState('done');
   };
 
-  return (
-    <div className="mt-1.5">
-      <button
-        onClick={handleResolve}
-        disabled={state === 'loading'}
-        className={`flex items-center gap-1 text-[10px] px-2.5 py-1 rounded font-semibold transition-colors ${
-          state === 'done'
-            ? 'bg-green-100 text-green-700 border border-green-300'
-            : mode === 'action'
-            ? 'bg-teal-600 text-white hover:bg-teal-700'
-            : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200'
-        }`}
-      >
-        {state === 'loading' && <Loader2 size={9} className="animate-spin" />}
-        {state === 'done' && <CheckCheck size={9} />}
-        {state === 'idle' && mode === 'action' && <Zap size={9} />}
-        {state === 'loading' ? 'Agent working…'
-          : state === 'done' ? 'Done — hide'
-          : mode === 'action' ? 'Resolve'
-          : 'Resolve'}
-      </button>
+  const appShortcut = BLOCKER_APP[blocker.type];
 
-      {state === 'done' && result && (
-        <div className={`mt-1.5 p-2 rounded text-[10px] leading-relaxed border ${
-          mode === 'action'
-            ? 'bg-teal-50 border-teal-200 text-teal-800'
-            : 'bg-blue-50 border-blue-200 text-slate-700'
-        }`}>
-          {mode === 'action' && (
-            <span className="font-semibold text-teal-700 block mb-0.5">✓ Action taken:</span>
-          )}
-          {mode === 'advisory' && (
-            <span className="font-semibold text-blue-700 block mb-0.5">Steps to resolve:</span>
-          )}
-          {result}
-        </div>
+  return (
+    <div className="mt-1.5 flex flex-col gap-1.5">
+      {/* App shortcut — shown immediately when a native EHR app is the right tool */}
+      {appShortcut && (
+        <AppShortcutButton shortcut={appShortcut} />
       )}
+
+      {/* Agent resolve button (still available as a fallback / to send pages/requests) */}
+      <div>
+        <button
+          onClick={handleResolve}
+          disabled={state === 'loading'}
+          className={`flex items-center gap-1 text-[10px] px-2.5 py-1 rounded font-semibold transition-colors ${
+            state === 'done'
+              ? 'bg-green-100 text-green-700 border border-green-300'
+              : mode === 'action'
+              ? 'bg-teal-600 text-white hover:bg-teal-700'
+              : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200'
+          }`}
+        >
+          {state === 'loading' && <Loader2 size={9} className="animate-spin" />}
+          {state === 'done' && <CheckCheck size={9} />}
+          {state === 'idle' && mode === 'action' && <Zap size={9} />}
+          {state === 'loading' ? 'Agent working…'
+            : state === 'done' ? 'Done — hide'
+            : mode === 'action' ? 'Ask agent to resolve'
+            : 'Ask agent for guidance'}
+        </button>
+
+        {state === 'done' && result && (
+          <div className={`mt-1.5 p-2 rounded text-[10px] leading-relaxed border ${
+            mode === 'action'
+              ? 'bg-teal-50 border-teal-200 text-teal-800'
+              : 'bg-blue-50 border-blue-200 text-slate-700'
+          }`}>
+            {mode === 'action' && (
+              <span className="font-semibold text-teal-700 block mb-0.5">✓ Action taken:</span>
+            )}
+            {mode === 'advisory' && (
+              <span className="font-semibold text-blue-700 block mb-0.5">Steps to resolve:</span>
+            )}
+            {result}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -565,7 +633,7 @@ export function LabPriorityQueue({ initialEntries }: { initialEntries: LabEntry[
 // Main WorklistTab
 // ---------------------------------------------------------------------------
 
-export default function WorklistTab() {
+export default function WorklistTab({ department }: { department?: Department }) {
   const { patients, beds, loading } = useAppStore();
 
   if (loading) {
@@ -576,12 +644,17 @@ export default function WorklistTab() {
     );
   }
 
+  // Filter patients to the selected department (match unit label)
+  const deptPatients = department
+    ? patients.filter((p) => p.unit === department.label)
+    : patients;
+
   const isFullyReady = (p: Patient) =>
     p.blockers.length === 0 &&
     p.dischecklistItems.every((i) => i.completed) &&
     !p.labs.some((l) => l.status === 'pending' || l.status === 'stat');
 
-  const sorted = [...patients].sort((a, b) => {
+  const sorted = [...deptPatients].sort((a, b) => {
     const ra = isFullyReady(a) ? 1 : 0;
     const rb = isFullyReady(b) ? 1 : 0;
     if (ra !== rb) return ra - rb; // ready goes last
@@ -590,7 +663,7 @@ export default function WorklistTab() {
 
   // Build initial lab queue: pending/stat labs sorted STAT first, then by patient readiness
   const labEntries: LabEntry[] = [];
-  for (const patient of patients) {
+  for (const patient of deptPatients) {
     const bed = beds.find((b) => b.patientId === patient.id);
     const room = bed?.room ?? '—';
     for (const lab of patient.labs) {
@@ -611,7 +684,9 @@ export default function WorklistTab() {
       <div className="flex-1 min-w-0 flex flex-col gap-3 overflow-y-auto">
         <div className="flex items-center justify-between flex-shrink-0">
           <div>
-            <h2 className="text-sm font-bold text-slate-800">Patient Worklist</h2>
+            <h2 className="text-sm font-bold text-slate-800">
+              Patient Worklist{department ? ` — ${department.label}` : ''}
+            </h2>
             <p className="text-[11px] text-slate-400">
               Ordered by discharge readiness · {sorted.length} patients
             </p>
