@@ -26,7 +26,7 @@ const MOCK_RESPONSES: Record<string, string> = {
   blocker:
     'The main barrier to discharge appears to be a pending lab result. Once that resolves, the patient meets clinical criteria. I suggest flagging the attending now so discharge orders can be written proactively.',
   transport_action:
-    'Transport request #TR-{ref} submitted to the care coordinator. Estimated pickup window: 2–4 PM today. The transport team will call the family using the contact number on file. A copy of the request has been logged in the patient's record.',
+    `Transport request #TR-{ref} submitted to the care coordinator. Estimated pickup window: 2–4 PM today. The transport team will call the family using the contact number on file. A copy of the request has been logged in the patient's record.`,
   transport_generic:
     'Transportation arrangements are the outstanding blocker. I can draft a transport request to the care coordinator. The patient is otherwise clinically ready for discharge today.',
   md_order_action:
