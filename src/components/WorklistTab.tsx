@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   FlaskConical, Truck, ClipboardList, Users, Package, Pill,
   ChevronDown, ChevronUp, CheckCircle2, Loader2,
-  ArrowUp, ArrowDown, Zap, CheckCheck, ExternalLink,
+  ArrowUp, ArrowDown, Zap, CheckCheck,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { Blocker, Lab, Patient } from '../types';
@@ -79,37 +79,58 @@ function labWaitClass(iso: string) {
 
 interface AppShortcut {
   name: string;
-  abbr: string;   // 2-3 char abbreviation shown in the icon
-  bg: string;     // Tailwind bg colour
-  text: string;   // Tailwind text colour
-  href: string;   // Deep-link (powerchart://, etc.) or '#' for demo
+  icon: React.ReactNode;
+  bg: string;
+  href: string;
   tooltip: string;
 }
+
+// SVG icons for the three Cerner / Oracle Health apps most relevant to discharge
+const PowerChartIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" className="w-full h-full">
+    <polyline
+      points="1,12 4,12 6,4 8,20 10,12 14,12 15.5,8 17,16 19,12 23,12"
+      stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const PharmNetIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" className="w-full h-full">
+    {/* Capsule shape split down the middle — universal pharmacy symbol */}
+    <rect x="3" y="8" width="18" height="8" rx="4" stroke="white" strokeWidth="2.2"/>
+    <line x1="12" y1="8" x2="12" y2="16" stroke="white" strokeWidth="2.2"/>
+  </svg>
+);
+
+const FirstNetIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-full h-full">
+    {/* Lightning bolt — emergency / patient flow */}
+    <path d="M13 2L5 13.5H11L10 22L19 10.5H13L13 2Z" fill="white"/>
+  </svg>
+);
 
 const BLOCKER_APP: Partial<Record<Blocker['type'], AppShortcut>> = {
   'md-order': {
     name: 'PowerChart',
-    abbr: 'PC',
-    bg: 'bg-[#0077B6]',
-    text: 'text-white',
+    icon: <PowerChartIcon />,
+    bg: 'bg-[#0C6EAA]',
     href: 'powerchart://',
     tooltip: 'Open PowerChart to write or co-sign the discharge order',
   },
   'medication': {
     name: 'PharmNet',
-    abbr: 'Rx',
+    icon: <PharmNetIcon />,
     bg: 'bg-[#6A0DAD]',
-    text: 'text-white',
     href: 'pharmnet://',
     tooltip: 'Open PharmNet to complete medication reconciliation',
   },
   'placement': {
-    name: 'Care Mgmt',
-    abbr: 'CM',
-    bg: 'bg-[#2E7D32]',
-    text: 'text-white',
-    href: '#',
-    tooltip: 'Open Care Management to search for placement options',
+    name: 'FirstNet',
+    icon: <FirstNetIcon />,
+    bg: 'bg-[#C94B00]',
+    href: 'firstnet://',
+    tooltip: 'Open FirstNet to manage patient placement and bed assignment',
   },
 };
 
@@ -117,15 +138,18 @@ function AppShortcutButton({ shortcut }: { shortcut: AppShortcut }) {
   return (
     <a
       href={shortcut.href}
-      onClick={(e) => e.preventDefault()}   // demo: prevent navigation
+      onClick={(e) => e.preventDefault()}
       title={shortcut.tooltip}
-      className={`inline-flex items-center gap-1.5 text-[10px] px-2 py-1 rounded font-semibold transition-opacity hover:opacity-80 ${shortcut.bg} ${shortcut.text}`}
+      className="flex flex-col items-center gap-1 group cursor-pointer"
     >
-      <span className="inline-flex items-center justify-center w-4 h-4 bg-white/20 rounded-sm text-[9px] font-bold flex-shrink-0">
-        {shortcut.abbr}
+      <div
+        className={`w-9 h-9 rounded-xl flex items-center justify-center p-2 shadow-sm transition-transform group-hover:scale-105 active:scale-95 ${shortcut.bg}`}
+      >
+        {shortcut.icon}
+      </div>
+      <span className="text-[9px] font-medium text-slate-500 group-hover:text-slate-700 leading-none text-center w-10 truncate">
+        {shortcut.name}
       </span>
-      Open {shortcut.name}
-      <ExternalLink size={8} className="flex-shrink-0 opacity-70" />
     </a>
   );
 }
@@ -189,15 +213,13 @@ function ResolveButton({ patient, blocker }: { patient: Patient; blocker: Blocke
   const { resolveBlocker } = useAppStore();
 
   const handleResolve = async () => {
-    if (state === 'done') { setState('idle'); setResult(null); return; }
-    if (state === 'loading') return;
+    if (state !== 'idle') return;
     setState('loading');
     const prompt = mode === 'action'
       ? agentActionPrompt(patient, blocker)
       : agentAdvisoryPrompt(patient, blocker);
     const res = await askAgent(patient, prompt);
     setResult(res);
-    // Make it feel “live”: readiness bumps and some tasks auto-complete.
     await resolveBlocker(patient.id, blocker);
     setState('done');
   };
@@ -205,47 +227,49 @@ function ResolveButton({ patient, blocker }: { patient: Patient; blocker: Blocke
   const appShortcut = BLOCKER_APP[blocker.type];
 
   return (
-    <div className="mt-1.5 flex flex-col gap-1.5">
-      {/* App shortcut — shown immediately when a native EHR app is the right tool */}
+    <div className=”mt-2 space-y-2”>
+      {/* App shortcut tile — shown immediately when a native EHR app is the right tool */}
       {appShortcut && (
-        <AppShortcutButton shortcut={appShortcut} />
+        <div className=”flex items-start”>
+          <AppShortcutButton shortcut={appShortcut} />
+        </div>
       )}
 
-      {/* Agent resolve button (still available as a fallback / to send pages/requests) */}
+      {/* Agent button + result */}
       <div>
         <button
           onClick={handleResolve}
-          disabled={state === 'loading'}
+          disabled={state !== 'idle'}
           className={`flex items-center gap-1 text-[10px] px-2.5 py-1 rounded font-semibold transition-colors ${
             state === 'done'
-              ? 'bg-green-100 text-green-700 border border-green-300'
+              ? 'bg-green-100 text-green-700 border border-green-300 cursor-default'
               : mode === 'action'
-              ? 'bg-teal-600 text-white hover:bg-teal-700'
-              : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200'
+              ? 'bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-60'
+              : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200 disabled:opacity-60'
           }`}
         >
-          {state === 'loading' && <Loader2 size={9} className="animate-spin" />}
-          {state === 'done' && <CheckCheck size={9} />}
+          {state === 'loading' && <Loader2 size={9} className=”animate-spin” />}
+          {state === 'done'    && <CheckCheck size={9} />}
           {state === 'idle' && mode === 'action' && <Zap size={9} />}
           {state === 'loading' ? 'Agent working…'
-            : state === 'done' ? 'Done — hide'
-            : mode === 'action' ? 'Ask agent to resolve'
-            : 'Ask agent for guidance'}
+            : state === 'done'   ? 'Agent done'
+            : mode === 'action'  ? 'Ask agent to resolve'
+            :                      'Ask agent for guidance'}
         </button>
 
-        {state === 'done' && result && (
-          <div className={`mt-1.5 p-2 rounded text-[10px] leading-relaxed border ${
+        {result && (
+          <div className={`mt-1.5 p-2.5 rounded text-[10px] leading-relaxed border ${
             mode === 'action'
-              ? 'bg-teal-50 border-teal-200 text-teal-800'
-              : 'bg-blue-50 border-blue-200 text-slate-700'
+              ? 'bg-teal-50 border-teal-200'
+              : 'bg-blue-50 border-blue-200'
           }`}>
-            {mode === 'action' && (
-              <span className="font-semibold text-teal-700 block mb-0.5">✓ Action taken:</span>
-            )}
-            {mode === 'advisory' && (
-              <span className="font-semibold text-blue-700 block mb-0.5">Steps to resolve:</span>
-            )}
-            {result}
+            <div className={`flex items-center gap-1 mb-1 font-semibold ${
+              mode === 'action' ? 'text-teal-700' : 'text-blue-700'
+            }`}>
+              <CheckCheck size={10} />
+              {mode === 'action' ? 'Action taken' : 'Guidance'}
+            </div>
+            <p className=”whitespace-pre-wrap text-slate-700”>{result}</p>
           </div>
         )}
       </div>
