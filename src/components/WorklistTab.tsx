@@ -87,10 +87,13 @@ interface AppShortcut {
 
 // SVG icons for the three Cerner / Oracle Health apps most relevant to discharge
 const PowerChartIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" className="w-full h-full">
+  // Faithful recreation of the Cerner / Oracle Health PowerChart app icon:
+  // white PQRST cardiac trace on a blue background
+  <svg viewBox="0 0 32 32" fill="none" className="w-full h-full">
+    {/* P wave → QRS complex → T wave, baseline at y=16 */}
     <polyline
-      points="1,12 4,12 6,4 8,20 10,12 14,12 15.5,8 17,16 19,12 23,12"
-      stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+      points="0,16 5,16 6.5,14 8,18 8.5,16 9.5,20 11,2 12.5,30 14,16 18,16 19.5,13 21,19 22.5,16 32,16"
+      stroke="white" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
     />
   </svg>
 );
@@ -227,10 +230,10 @@ function ResolveButton({ patient, blocker }: { patient: Patient; blocker: Blocke
   const appShortcut = BLOCKER_APP[blocker.type];
 
   return (
-    <div className=”mt-2 space-y-2”>
+    <div className="mt-2 space-y-2">
       {/* App shortcut tile — shown immediately when a native EHR app is the right tool */}
       {appShortcut && (
-        <div className=”flex items-start”>
+        <div className="flex items-start">
           <AppShortcutButton shortcut={appShortcut} />
         </div>
       )}
@@ -248,7 +251,7 @@ function ResolveButton({ patient, blocker }: { patient: Patient; blocker: Blocke
               : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200 disabled:opacity-60'
           }`}
         >
-          {state === 'loading' && <Loader2 size={9} className=”animate-spin” />}
+          {state === 'loading' && <Loader2 size={9} className="animate-spin" />}
           {state === 'done'    && <CheckCheck size={9} />}
           {state === 'idle' && mode === 'action' && <Zap size={9} />}
           {state === 'loading' ? 'Agent working…'
@@ -269,7 +272,7 @@ function ResolveButton({ patient, blocker }: { patient: Patient; blocker: Blocke
               <CheckCheck size={10} />
               {mode === 'action' ? 'Action taken' : 'Guidance'}
             </div>
-            <p className=”whitespace-pre-wrap text-slate-700”>{result}</p>
+            <p className="whitespace-pre-wrap text-slate-700">{result}</p>
           </div>
         )}
       </div>
