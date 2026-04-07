@@ -1,4 +1,4 @@
-import { BarChart2, Users, Stethoscope } from 'lucide-react';
+import { BarChart2, Users, Stethoscope, Sparkles, Loader2 } from 'lucide-react';
 import MetricsBar from './MetricsBar';
 import type { Department } from './layout/TopBar';
 import { useState } from 'react';
@@ -163,12 +163,67 @@ const CAPACITY_BY_DEPT: Record<string, { maxBeds: number; hourly: HourPoint[]; o
   },
 };
 
+// ---------------------------------------------------------------------------
+// AI capacity summary
+// ---------------------------------------------------------------------------
+
+function getCapacitySummary(
+  data: { maxBeds: number; hourly: HourPoint[]; orCases: OrCase[]; staffing: StaffingRow[]; note?: string },
+  dept: string,
+): string {
+  const minAvail = Math.min(...data.hourly.map((h) => h.available));
+  const criticalHours = data.hourly.filter((h) => h.available <= 3).map((h) => h.hour);
+  const maxIncoming = Math.max(...data.hourly.map((h) => h.incoming));
+  const pendingBeds = data.orCases.filter((c) => c.status === 'pending-bed');
+  const understaffed = data.staffing.filter((s) => s.rns < s.target || s.pcts < s.targetPcts);
+
+  const parts: string[] = [];
+
+  parts.push(
+    `Bed availability in ${dept} is projected to reach a low of ${minAvail} bed${minAvail !== 1 ? 's' : ''}` +
+      (criticalHours.length > 0
+        ? ` — critically tight around ${criticalHours.slice(0, 3).join(', ')}. Prioritise expediting discharges before these windows.`
+        : `. No critical shortfalls are expected in the next 24 h.`),
+  );
+
+  if (pendingBeds.length > 0) {
+    parts.push(
+      `${pendingBeds.length} incoming surgical patient${pendingBeds.length > 1 ? 's' : ''} (${pendingBeds.map((p) => p.patient).join(', ')}) still need${pendingBeds.length === 1 ? 's a' : ''} bed assignment${pendingBeds.length > 1 ? 's' : ''}. Recommend expediting discharges in matching rooms now.`,
+    );
+  }
+
+  if (maxIncoming > 2) {
+    parts.push(`Incoming patient load peaks at ${maxIncoming} — pre-assign beds to avoid admission bottlenecks.`);
+  }
+
+  if (understaffed.length > 0) {
+    const names = understaffed.map((s) => s.shift).join(' and ');
+    parts.push(`Staffing shortfall detected for ${names}. Consider agency cover or redistributing assignments across shifts.`);
+  }
+
+  if (understaffed.length === 0 && pendingBeds.length === 0 && minAvail > 3) {
+    parts.push(`Staffing and capacity look balanced across all shifts. No immediate action required.`);
+  }
+
+  return parts.join('\n\n');
+}
+
 export default function CapacityView({ department }: { department?: Department }) {
   const deptLabel = department?.label ?? '4-North';
   const deptId = department?.id ?? '4-north';
   const data = CAPACITY_BY_DEPT[deptId] ?? CAPACITY_BY_DEPT['4-north'];
   const [showAvailable, setShowAvailable] = useState(true);
   const [showIncoming, setShowIncoming] = useState(true);
+  const [aiState, setAiState] = useState<'idle' | 'loading' | 'done'>('idle');
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+
+  const handleAISummary = async () => {
+    if (aiState !== 'idle') return;
+    setAiState('loading');
+    await new Promise<void>((r) => setTimeout(r, 900 + Math.random() * 400));
+    setAiSummary(getCapacitySummary(data, deptLabel));
+    setAiState('done');
+  };
   return (
     <div className="flex-1 overflow-y-auto flex flex-col">
       <MetricsBar department={department} />
@@ -183,7 +238,26 @@ export default function CapacityView({ department }: { department?: Department }
         <div className="flex items-center gap-2 mb-3">
           <BarChart2 size={14} className="text-blue-600" />
           <h2 className="text-sm font-bold text-slate-700">Projected Bed Availability – Next 24h</h2>
+          <button
+            onClick={handleAISummary}
+            disabled={aiState !== 'idle'}
+            className="ml-auto flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full border border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors disabled:opacity-60 font-semibold"
+          >
+            {aiState === 'loading'
+              ? <Loader2 size={10} className="animate-spin" />
+              : <Sparkles size={10} />}
+            {aiState === 'loading' ? 'Analyzing…' : 'AI Summary'}
+          </button>
         </div>
+        {aiSummary && (
+          <div className="mb-3 p-3 bg-purple-50 border border-purple-200 rounded-lg text-[11px] leading-relaxed">
+            <div className="flex items-center gap-1.5 font-semibold text-purple-700 mb-1.5">
+              <Sparkles size={11} />
+              Capacity AI Summary
+            </div>
+            <p className="whitespace-pre-wrap text-slate-700">{aiSummary}</p>
+          </div>
+        )}
         <div className="bg-white border border-slate-200 rounded-lg p-4">
           <div className="flex items-end gap-1 h-32 overflow-x-auto pb-1">
             {data.hourly.map((d, i) => {
@@ -257,7 +331,7 @@ export default function CapacityView({ department }: { department?: Department }
                 <th className="text-left px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wide">Patient</th>
                 <th className="text-left px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wide">Procedure</th>
                 <th className="text-left px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wide">OR Time</th>
-                <th className="text-left px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wide">Exp. Floor</th>
+                <th className="text-left px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wide">Exp. End Time</th>
                 <th className="text-left px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wide">Bed</th>
                 <th className="text-left px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wide">Status</th>
               </tr>
