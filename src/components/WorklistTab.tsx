@@ -244,12 +244,12 @@ function ResolveButton({ patient, blocker }: { patient: Patient; blocker: Blocke
         <button
           onClick={handleResolve}
           disabled={state !== 'idle'}
-          className={`flex items-center gap-1 text-[10px] px-2.5 py-1 rounded font-semibold transition-colors ${
+          className={`flex items-center gap-1 text-[10px] px-3 py-1 rounded-full font-semibold transition-colors ${
             state === 'done'
-              ? 'bg-green-100 text-green-700 border border-green-300 cursor-default'
+              ? 'bg-green-50 text-green-700 border border-green-200 cursor-default'
               : mode === 'action'
-              ? 'bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-60'
-              : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200 disabled:opacity-60'
+              ? 'bg-teal-500 text-white hover:bg-teal-600 disabled:opacity-60'
+              : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 disabled:opacity-60'
           }`}
         >
           {state === 'loading' && <Loader2 size={9} className="animate-spin" />}
@@ -311,133 +311,146 @@ function PatientRow({ patient, rank }: { patient: Patient; rank: number }) {
   };
 
   return (
-    <div className={`bg-white border border-slate-200 rounded-lg overflow-hidden ${isReady ? 'opacity-60 grayscale' : ''}`}>
-      {/* Row header */}
-      <div
-        className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-50 transition-colors"
-        onClick={() => setExpanded((v) => !v)}
-      >
-        <span className="text-sm font-bold text-slate-300 w-5 text-center flex-shrink-0">
-          {rank}
-        </span>
+    <div className={`bg-white border border-slate-100 rounded-xl shadow-sm overflow-hidden ${isReady ? 'opacity-50' : ''}`}>
+      <div className="flex">
+        {/* Left readiness color strip */}
+        <div className={`w-[3px] flex-shrink-0 ${readinessBg(patient.dischargeReadiness)}`} />
 
-        {/* Readiness score */}
-        <div className="flex flex-col items-center w-10 flex-shrink-0">
-          <span className={`text-lg font-bold leading-none ${readinessClass(patient.dischargeReadiness)}`}>
-            {patient.dischargeReadiness}
-          </span>
-          <div className="w-8 h-1 bg-slate-200 rounded-full overflow-hidden mt-0.5">
-            <div
-              className={`h-full rounded-full ${readinessBg(patient.dischargeReadiness)}`}
-              style={{ width: `${patient.dischargeReadiness}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Patient info */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={(e) => { e.stopPropagation(); selectPatient(patient.id); }}
-              className="text-sm font-semibold text-slate-800 hover:text-teal-600 transition-colors"
-            >
-              {patient.name}
-            </button>
-            <span className="text-xs text-slate-400">{bed?.room ?? '—'}</span>
-            <span className={`text-[9px] px-1.5 py-0.5 rounded ${eddClass(patient.edd)}`}>
-              {eddLabel(patient.edd)}
+          {/* Row header */}
+          <div
+            className="flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-slate-50/70 transition-colors"
+            onClick={() => setExpanded((v) => !v)}
+          >
+            <span className="text-xs font-medium text-slate-300 w-4 text-right flex-shrink-0">
+              {rank}
             </span>
-          </div>
-          <div className="text-[11px] text-slate-500 truncate mt-0.5">
-            {patient.diagnosis} · {patient.physician}
-          </div>
-        </div>
 
-        {/* Status */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {isDischarged ? (
-            <div className="flex items-center gap-2">
-              <span className="flex items-center gap-1 text-[10px] text-slate-600 font-semibold bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
-                Cleaning
+            {/* Readiness score */}
+            <div className="flex flex-col items-center w-12 flex-shrink-0">
+              <span className={`text-2xl font-bold leading-none tabular-nums ${readinessClass(patient.dischargeReadiness)}`}>
+                {patient.dischargeReadiness}
               </span>
-              <button
-                type="button"
-                onClick={handleExpediteCleaning}
-                disabled={!bed?.id || expediting}
-                className="text-[10px] px-2 py-0.5 rounded border border-slate-300 text-slate-700 hover:bg-white disabled:opacity-60"
-              >
-                {expediting ? 'Expediting…' : 'Expedite'}
-              </button>
+              <div className="w-10 h-0.5 bg-slate-100 rounded-full overflow-hidden mt-1">
+                <div
+                  className={`h-full rounded-full ${readinessBg(patient.dischargeReadiness)}`}
+                  style={{ width: `${patient.dischargeReadiness}%` }}
+                />
+              </div>
             </div>
-          ) : isReady ? (
-            <span className="flex items-center gap-1 text-[10px] text-green-600 font-semibold bg-green-50 px-2 py-0.5 rounded-full border border-green-200">
-              <CheckCircle2 size={10} /> Ready
-            </span>
-          ) : (
-            <span className="text-[10px] text-slate-500">
-              {patient.blockers.length > 0 && (
-                <span className="text-amber-600 font-semibold mr-1">
-                  {patient.blockers.length} blocker{patient.blockers.length > 1 ? 's' : ''}
+
+            {/* Patient info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={(e) => { e.stopPropagation(); selectPatient(patient.id); }}
+                  className="font-semibold text-slate-900 hover:text-teal-600 transition-colors"
+                >
+                  {patient.name}
+                </button>
+                {bed?.room && (
+                  <span className="text-[10px] font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-md">
+                    {bed.room}
+                  </span>
+                )}
+                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-md ${eddClass(patient.edd)}`}>
+                  {eddLabel(patient.edd)}
                 </span>
+              </div>
+              <div className="text-xs text-slate-400 truncate mt-0.5">
+                {patient.diagnosis} · {patient.physician}
+              </div>
+            </div>
+
+            {/* Status */}
+            <div className="flex items-center gap-3 flex-shrink-0">
+              {isDischarged ? (
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center gap-1 text-[10px] text-slate-600 font-semibold bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">
+                    Cleaning
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleExpediteCleaning}
+                    disabled={!bed?.id || expediting}
+                    className="text-[10px] px-2.5 py-0.5 rounded-full border border-slate-300 text-slate-600 hover:bg-slate-50 disabled:opacity-60 transition-colors"
+                  >
+                    {expediting ? 'Expediting…' : 'Expedite'}
+                  </button>
+                </div>
+              ) : isReady ? (
+                <span className="flex items-center gap-1 text-[10px] text-green-600 font-semibold bg-green-50 px-2.5 py-0.5 rounded-full border border-green-200">
+                  <CheckCircle2 size={10} /> Ready
+                </span>
+              ) : (
+                <div className="text-right leading-tight">
+                  {patient.blockers.length > 0 && (
+                    <div className="text-xs font-semibold text-rose-500">
+                      {patient.blockers.length} blocker{patient.blockers.length > 1 ? 's' : ''}
+                    </div>
+                  )}
+                  <div className="text-[11px] text-slate-400">
+                    {completedItems}/{totalItems} tasks
+                  </div>
+                </div>
               )}
-              <span className="text-slate-400">{completedItems}/{totalItems} tasks</span>
-            </span>
+              {expanded
+                ? <ChevronUp size={14} className="text-slate-300" />
+                : <ChevronDown size={14} className="text-slate-300" />
+              }
+            </div>
+          </div>
+
+          {/* Expanded content */}
+          {expanded && (
+            <div className="border-t border-slate-50 divide-y divide-slate-50">
+              {isReady && (
+                <div className="flex items-center gap-2 text-xs text-green-700 px-4 py-3">
+                  <CheckCircle2 size={13} />
+                  All discharge tasks complete — patient is ready to go home.
+                </div>
+              )}
+
+              {patient.blockers.map((b, i) => (
+                <div key={i} className="px-4 py-3">
+                  <div className="flex items-start gap-2 border-l-2 border-amber-300 pl-3">
+                    <span className="text-amber-500 mt-0.5 flex-shrink-0">{blockerIcon(b.type)}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-slate-700">{b.description}</div>
+                      <ResolveButton patient={patient} blocker={b} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {incompleteItems > 0 && (
+                <div className="px-4 py-3 space-y-1.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-300">
+                    Pending Tasks ({incompleteItems})
+                  </div>
+                  {patient.dischecklistItems
+                    .filter((i) => !i.completed)
+                    .slice(0, 3)
+                    .map((item) => (
+                      <div key={item.id} className="flex items-center gap-2 text-xs text-slate-500">
+                        <div className="w-3.5 h-3.5 rounded border-[1.5px] border-slate-200 flex-shrink-0" />
+                        {item.label}
+                      </div>
+                    ))}
+                  {incompleteItems > 3 && (
+                    <button
+                      onClick={() => selectPatient(patient.id)}
+                      className="text-[10px] text-teal-600 hover:underline"
+                    >
+                      +{incompleteItems - 3} more — open full checklist
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           )}
-          {expanded
-            ? <ChevronUp size={14} className="text-slate-400" />
-            : <ChevronDown size={14} className="text-slate-400" />
-          }
         </div>
       </div>
-
-      {/* Expanded content */}
-      {expanded && (
-        <div className="px-4 pb-3 pt-1 border-t border-slate-100 bg-slate-50/60 space-y-2">
-          {isReady && (
-            <div className="flex items-center gap-2 text-xs text-green-700 py-1">
-              <CheckCircle2 size={13} />
-              All discharge tasks complete — patient is ready to go home.
-            </div>
-          )}
-
-          {patient.blockers.map((b, i) => (
-            <div key={i} className="p-2 rounded bg-amber-50 border border-amber-200">
-              <div className="flex items-start gap-2">
-                <span className="text-amber-500 mt-0.5">{blockerIcon(b.type)}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium text-slate-700">{b.description}</div>
-                  <ResolveButton patient={patient} blocker={b} />
-                </div>
-              </div>
-            </div>
-          ))}
-
-          {incompleteItems > 0 && (
-            <div className="space-y-1">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Pending tasks ({incompleteItems})
-              </div>
-              {patient.dischecklistItems
-                .filter((i) => !i.completed)
-                .slice(0, 3)
-                .map((item) => (
-                  <div key={item.id} className="flex items-center gap-2 text-xs text-slate-600">
-                    <div className="w-3 h-3 rounded border border-slate-300 flex-shrink-0" />
-                    {item.label}
-                  </div>
-                ))}
-              {incompleteItems > 3 && (
-                <button
-                  onClick={() => selectPatient(patient.id)}
-                  className="text-[10px] text-teal-600 hover:underline"
-                >
-                  +{incompleteItems - 3} more — open full checklist
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -713,10 +726,10 @@ export default function WorklistTab({ department }: { department?: Department })
       {/* Sticky worklist header */}
       <div className="flex items-center justify-between px-4 py-2.5 bg-white border-b border-slate-200 flex-shrink-0">
         <div>
-          <h2 className="text-sm font-bold text-slate-800">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
             Patient Worklist{department ? ` — ${department.label}` : ''}
-          </h2>
-          <p className="text-[11px] text-slate-400">
+          </p>
+          <p className="text-[11px] text-slate-400 mt-0.5">
             Ordered by discharge readiness · {sorted.length} patients
           </p>
         </div>
