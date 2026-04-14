@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { AppProvider } from './store/useAppStore';
+import LoginGate from './components/LoginGate';
 import TopBar, { DEPARTMENTS } from './components/layout/TopBar';
 import PatientPanel from './components/PatientPanel';
 import WorklistTab from './components/WorklistTab';
@@ -60,8 +61,10 @@ function AppShell() {
 
 export default function App() {
   return (
-    <AppProvider>
-      <AppShell />
-    </AppProvider>
+    <LoginGate>
+      <AppProvider>
+        <AppShell />
+      </AppProvider>
+    </LoginGate>
   );
 }
