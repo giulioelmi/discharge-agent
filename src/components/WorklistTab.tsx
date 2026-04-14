@@ -8,6 +8,7 @@ import { useAppStore } from '../store/useAppStore';
 import { Blocker, Lab, Patient } from '../types';
 import { askAgent } from '../api/agent';
 import type { Department } from './layout/TopBar';
+import MetricsBar from './MetricsBar';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -706,39 +707,40 @@ export default function WorklistTab({ department }: { department?: Department })
   });
 
   return (
-    <div className="flex-1 overflow-hidden flex gap-4 p-4 min-h-0">
-      {/* Left: patient worklist */}
-      <div className="flex-1 min-w-0 flex flex-col gap-3 overflow-y-auto">
-        <div className="flex items-center justify-between flex-shrink-0">
-          <div>
-            <h2 className="text-sm font-bold text-slate-800">
-              Patient Worklist{department ? ` — ${department.label}` : ''}
-            </h2>
-            <p className="text-[11px] text-slate-400">
-              Ordered by discharge readiness · {sorted.length} patients
-            </p>
-          </div>
-          <div className="flex items-center gap-3 text-[10px] text-slate-500">
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />≥70 Ready
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />40–69
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />{'<'}40
-            </span>
-          </div>
-        </div>
+    <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+      <MetricsBar department={department} />
 
+      {/* Sticky worklist header */}
+      <div className="flex items-center justify-between px-4 py-2.5 bg-white border-b border-slate-200 flex-shrink-0">
+        <div>
+          <h2 className="text-sm font-bold text-slate-800">
+            Patient Worklist{department ? ` — ${department.label}` : ''}
+          </h2>
+          <p className="text-[11px] text-slate-400">
+            Ordered by discharge readiness · {sorted.length} patients
+          </p>
+        </div>
+        <div className="flex items-center gap-3 text-[10px] text-slate-500">
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />≥70 Ready
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />40–69
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />{'<'}40
+          </span>
+        </div>
+      </div>
+
+      {/* Scrollable patient list */}
+      <div className="flex-1 overflow-y-auto p-3">
         <div className="space-y-2">
           {sorted.map((patient, i) => (
             <PatientRow key={patient.id} patient={patient} rank={i + 1} />
           ))}
         </div>
       </div>
-
-      {/* Right: lab priority queue (temporarily hidden) */}
     </div>
   );
 }
