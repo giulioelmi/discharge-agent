@@ -3,17 +3,17 @@ import { Activity } from 'lucide-react';
 
 const SESSION_KEY = 'demo_authed';
 
-const DEMO_EMAIL = import.meta.env.VITE_DEMO_EMAIL as string | undefined;
+const DEMO_USER = import.meta.env.VITE_DEMO_USER as string | undefined;
 const DEMO_PASSWORD = import.meta.env.VITE_DEMO_PASSWORD as string | undefined;
 
 // If no credentials are configured, bypass the gate (local dev)
-const AUTH_ENABLED = Boolean(DEMO_EMAIL && DEMO_PASSWORD);
+const AUTH_ENABLED = Boolean(DEMO_USER && DEMO_PASSWORD);
 
 export default function LoginGate({ children }: { children: ReactNode }) {
   const [authed, setAuthed] = useState(
     !AUTH_ENABLED || sessionStorage.getItem(SESSION_KEY) === 'true'
   );
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
@@ -21,11 +21,11 @@ export default function LoginGate({ children }: { children: ReactNode }) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (email.trim() === DEMO_EMAIL && password === DEMO_PASSWORD) {
+    if (username.trim() === DEMO_USER && password === DEMO_PASSWORD) {
       sessionStorage.setItem(SESSION_KEY, 'true');
       setAuthed(true);
     } else {
-      setError('Incorrect email or password. Please try again.');
+      setError('Incorrect username or password. Please try again.');
     }
   }
 
@@ -46,18 +46,18 @@ export default function LoginGate({ children }: { children: ReactNode }) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1" htmlFor="email">
-              Email
+            <label className="block text-xs font-medium text-slate-600 mb-1" htmlFor="username">
+              Username
             </label>
             <input
-              id="email"
-              type="email"
-              autoComplete="email"
+              id="username"
+              type="text"
+              autoComplete="username"
               required
-              value={email}
-              onChange={(e) => { setEmail(e.target.value); setError(''); }}
+              value={username}
+              onChange={(e) => { setUsername(e.target.value); setError(''); }}
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent transition"
-              placeholder="you@example.com"
+              placeholder="username"
             />
           </div>
 
