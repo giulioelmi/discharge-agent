@@ -24,6 +24,13 @@ export interface ChecklistItem {
   category: 'clinical' | 'logistics' | 'education' | 'orders';
 }
 
+export interface PatientNote {
+  id: string;
+  author: string;
+  timestamp: string; // ISO
+  body: string;
+}
+
 export interface Patient {
   id: string;
   name: string;
@@ -41,6 +48,10 @@ export interface Patient {
   blockers: Blocker[];
   labs: Lab[];
   dischecklistItems: ChecklistItem[];
+  sex: 'M' | 'F' | 'Other';
+  dob: string; // ISO date e.g. "1952-01-15"
+  assignedNurse: string;
+  notes: PatientNote[];
 }
 
 export interface Bed {
