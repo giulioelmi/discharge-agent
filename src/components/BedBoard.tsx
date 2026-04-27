@@ -180,6 +180,8 @@ export default function BedBoard({ department }: { department?: Department }) {
   const deptLabel = department?.label ?? '4-North';
   const { beds, patients, loading } = useAppStore();
   const [filter, setFilter] = useState<BedStatus | null>(null);
+  const [view, setView] = useState<'all' | 'grouped'>('all');
+  const [onlyMine, setOnlyMine] = useState(false);
 
   const patientMap = Object.fromEntries(patients.map((p) => [p.id, p]));
 
@@ -202,7 +204,13 @@ export default function BedBoard({ department }: { department?: Department }) {
   const deptBeds = department
     ? beds.filter((b) => b.unit === department.label)
     : beds;
-  const filteredBeds = filter ? deptBeds.filter((b) => b.status === filter) : deptBeds;
+  const scopedBeds = onlyMine
+    ? deptBeds.filter((b) => {
+        const p = b.patientId ? patientMap[b.patientId] : undefined;
+        return p?.nurseAssigned === 'Sarah Chen';
+      })
+    : deptBeds;
+  const filteredBeds = filter ? scopedBeds.filter((b) => b.status === filter) : scopedBeds;
   const sortedBeds = [...filteredBeds].sort((a, b) => {
     const aIsCleaning = a.status === 'cleaning' ? 1 : 0;
     const bIsCleaning = b.status === 'cleaning' ? 1 : 0;
@@ -217,7 +225,19 @@ export default function BedBoard({ department }: { department?: Department }) {
         <h2 className="text-xs font-bold text-slate-600 uppercase tracking-wider">
           Bed Board — {deptLabel} ({filteredBeds.length} beds)
         </h2>
-        <div className="flex items-center gap-2 text-[10px] text-slate-500">
+        <div className="flex items-center gap-2 text-[10px] text-slate-500 flex-wrap justify-end">
+          <button
+            onClick={() => setView((v) => (v === 'all' ? 'grouped' : 'all'))}
+            className="rounded px-1.5 py-0.5 border border-slate-200"
+          >
+            {view === 'all' ? 'Grouped columns' : 'All beds view'}
+          </button>
+          <button
+            onClick={() => setOnlyMine((v) => !v)}
+            className={`rounded px-1.5 py-0.5 border ${onlyMine ? 'bg-teal-50 border-teal-300 text-teal-700' : 'border-slate-200'}`}
+          >
+            {onlyMine ? 'My patients' : 'All nurses'}
+          </button>
           {legendItems.map((it) => {
             const active = filter === it.status;
             return (
@@ -237,15 +257,43 @@ export default function BedBoard({ department }: { department?: Department }) {
           })}
         </div>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
-        {sortedBeds.map((bed) => (
-          <BedCard
-            key={bed.id}
-            bed={bed}
-            patient={bed.patientId ? patientMap[bed.patientId] : undefined}
-          />
-        ))}
-      </div>
+      {view === 'all' ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
+          {sortedBeds.map((bed) => (
+            <BedCard
+              key={bed.id}
+              bed={bed}
+              patient={bed.patientId ? patientMap[bed.patientId] : undefined}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          {[
+            { title: 'Taken Beds', statuses: ['occupied', 'discharge-ready', 'pending-discharge', 'blocked'] as BedStatus[] },
+            { title: 'Available Beds', statuses: ['available'] as BedStatus[] },
+            { title: 'Beds Being Cleaned', statuses: ['cleaning'] as BedStatus[] },
+          ].map((group) => (
+            <div key={group.title} className="rounded border border-slate-200 p-2 bg-slate-50/70">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">{group.title}</div>
+              <div className="space-y-2">
+                {sortedBeds
+                  .filter((b) => group.statuses.includes(b.status))
+                  .map((bed) => (
+                    <BedCard
+                      key={bed.id}
+                      bed={bed}
+                      patient={bed.patientId ? patientMap[bed.patientId] : undefined}
+                    />
+                  ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[10px] text-slate-500 mt-2">
+        Patient-to-bed assignments are read-only in this board and must be finalized in the EHR.
+      </p>
     </div>
     </div>
   );

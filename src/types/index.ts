@@ -28,10 +28,13 @@ export interface Patient {
   id: string;
   name: string;
   age: number;
+  sex?: 'Female' | 'Male' | 'Other';
+  dob?: string;
   mrn: string;
   bedId: string;
   unit: string;
   physician: string;
+  nurseAssigned?: string;
   admitDate: string;
   edd: string; // Estimated Discharge Date in ISO format
   losActual: number; // length of stay in days so far
@@ -41,6 +44,7 @@ export interface Patient {
   blockers: Blocker[];
   labs: Lab[];
   dischecklistItems: ChecklistItem[];
+  notes?: string[];
 }
 
 export interface Bed {

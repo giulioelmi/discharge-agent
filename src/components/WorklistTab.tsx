@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   FlaskConical, Truck, ClipboardList, Users, Package, Pill,
   ChevronDown, ChevronUp, CheckCircle2, Loader2,
-  ArrowUp, ArrowDown, Zap, CheckCheck,
+  ArrowUp, ArrowDown, Zap, CheckCheck, AlertTriangle,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { Blocker, Lab, Patient } from '../types';
@@ -288,6 +288,8 @@ function PatientRow({ patient, rank }: { patient: Patient; rank: number }) {
   const { selectPatient, beds, expediteCleaning } = useAppStore();
   const [expanded, setExpanded] = useState(rank <= 3);
   const [expediting, setExpediting] = useState(false);
+  const [notes, setNotes] = useState<string[]>(patient.notes ?? []);
+  const [noteDraft, setNoteDraft] = useState('');
 
   const bed = beds.find((b) => b.patientId === patient.id);
   const incompleteItems = patient.dischecklistItems.filter((i) => !i.completed).length;
@@ -308,12 +310,21 @@ function PatientRow({ patient, rank }: { patient: Patient; rank: number }) {
       setExpediting(false);
     }
   };
+  const hasOverdueEDD = diffDays(patient.edd) < 0;
+  const addNote = () => {
+    const next = noteDraft.trim();
+    if (!next) return;
+    setNotes((prev) => [next, ...prev].slice(0, 4));
+    setNoteDraft('');
+  };
 
   return (
     <div className={`bg-white border border-slate-200 rounded-lg overflow-hidden ${isReady ? 'opacity-60 grayscale' : ''}`}>
       {/* Row header */}
       <div
-        className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-50 transition-colors"
+        className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
+          hasOverdueEDD ? 'bg-red-50 hover:bg-red-100/60' : 'hover:bg-slate-50'
+        }`}
         onClick={() => setExpanded((v) => !v)}
       >
         <span className="text-sm font-bold text-slate-300 w-5 text-center flex-shrink-0">
@@ -342,6 +353,11 @@ function PatientRow({ patient, rank }: { patient: Patient; rank: number }) {
             >
               {patient.name}
             </button>
+            {patient.blockers.length > 0 && (
+              <span title="Active blockers">
+                <AlertTriangle size={12} className="text-amber-500" />
+              </span>
+            )}
             <span className="text-xs text-slate-400">{bed?.room ?? '—'}</span>
             <span className={`text-[9px] px-1.5 py-0.5 rounded ${eddClass(patient.edd)}`}>
               {eddLabel(patient.edd)}
@@ -349,6 +365,9 @@ function PatientRow({ patient, rank }: { patient: Patient; rank: number }) {
           </div>
           <div className="text-[11px] text-slate-500 truncate mt-0.5">
             {patient.diagnosis} · {patient.physician}
+          </div>
+          <div className="text-[10px] text-slate-400 truncate mt-0.5">
+            {patient.sex ?? '—'} · DOB {patient.dob ?? '—'} · Nurse {patient.nurseAssigned ?? 'Unassigned'}
           </div>
         </div>
 
@@ -435,6 +454,38 @@ function PatientRow({ patient, rank }: { patient: Patient; rank: number }) {
               )}
             </div>
           )}
+
+          <div className="rounded border border-slate-200 bg-white p-2">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+              Internal Notes
+            </div>
+            <div className="flex gap-1.5">
+              <input
+                value={noteDraft}
+                onChange={(e) => setNoteDraft(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === 'Enter') addNote();
+                }}
+                placeholder="Add shift handoff note"
+                className="flex-1 border border-slate-200 rounded px-2 py-1 text-[11px]"
+              />
+              <button
+                onClick={(e) => { e.stopPropagation(); addNote(); }}
+                className="text-[10px] px-2 py-1 rounded bg-slate-800 text-white"
+              >
+                Add
+              </button>
+            </div>
+            {notes.length > 0 && (
+              <ul className="mt-1.5 space-y-1">
+                {notes.map((note, idx) => (
+                  <li key={`${note}-${idx}`} className="text-[10px] text-slate-600">• {note}</li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -662,6 +713,8 @@ export function LabPriorityQueue({ initialEntries }: { initialEntries: LabEntry[
 
 export default function WorklistTab({ department }: { department?: Department }) {
   const { patients, beds, loading } = useAppStore();
+  const [sortBy, setSortBy] = useState<'readiness' | 'name' | 'edd' | 'blockers'>('readiness');
+  const [onlyMine, setOnlyMine] = useState(false);
 
   if (loading) {
     return (
@@ -675,22 +728,28 @@ export default function WorklistTab({ department }: { department?: Department })
   const deptPatients = department
     ? patients.filter((p) => p.unit === department.label)
     : patients;
+  const scopedPatients = onlyMine
+    ? deptPatients.filter((p) => p.nurseAssigned === 'Sarah Chen')
+    : deptPatients;
 
   const isFullyReady = (p: Patient) =>
     p.blockers.length === 0 &&
     p.dischecklistItems.every((i) => i.completed) &&
     !p.labs.some((l) => l.status === 'pending' || l.status === 'stat');
 
-  const sorted = [...deptPatients].sort((a, b) => {
+  const sorted = [...scopedPatients].sort((a, b) => {
     const ra = isFullyReady(a) ? 1 : 0;
     const rb = isFullyReady(b) ? 1 : 0;
     if (ra !== rb) return ra - rb; // ready goes last
+    if (sortBy === 'name') return a.name.localeCompare(b.name);
+    if (sortBy === 'edd') return new Date(a.edd).getTime() - new Date(b.edd).getTime();
+    if (sortBy === 'blockers') return b.blockers.length - a.blockers.length;
     return b.dischargeReadiness - a.dischargeReadiness;
   });
 
   // Build initial lab queue: pending/stat labs sorted STAT first, then by patient readiness
   const labEntries: LabEntry[] = [];
-  for (const patient of deptPatients) {
+  for (const patient of scopedPatients) {
     const bed = beds.find((b) => b.patientId === patient.id);
     const room = bed?.room ?? '—';
     for (const lab of patient.labs) {
@@ -715,10 +774,26 @@ export default function WorklistTab({ department }: { department?: Department })
               Patient Worklist{department ? ` — ${department.label}` : ''}
             </h2>
             <p className="text-[11px] text-slate-400">
-              Ordered by discharge readiness · {sorted.length} patients
+              {onlyMine ? 'My assigned patients' : 'All patients'} · {sorted.length} patients
             </p>
           </div>
-          <div className="flex items-center gap-3 text-[10px] text-slate-500">
+          <div className="flex items-center gap-2 text-[10px] text-slate-500">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              className="border border-slate-200 rounded px-2 py-1 bg-white"
+            >
+              <option value="readiness">Sort: Readiness</option>
+              <option value="name">Sort: A–Z Name</option>
+              <option value="edd">Sort: Est. DC date</option>
+              <option value="blockers">Sort: # blockers</option>
+            </select>
+            <button
+              onClick={() => setOnlyMine((v) => !v)}
+              className={`rounded px-2 py-1 border ${onlyMine ? 'bg-teal-50 border-teal-300 text-teal-700' : 'border-slate-200'}`}
+            >
+              {onlyMine ? 'Assigned to me' : 'Show all nurses'}
+            </button>
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />≥70 Ready
             </span>
