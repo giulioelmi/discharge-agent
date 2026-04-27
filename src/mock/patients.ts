@@ -9,7 +9,10 @@ const addDays = (base: Date, days: number) => {
   return fmt(d);
 };
 
-export const MOCK_PATIENTS: Patient[] = [
+const ASSIGNED_NURSES = ['Sarah Chen', 'Michael Lopez', 'Angela Ward', 'Thomas Green'];
+const SEXES: Array<'Female' | 'Male'> = ['Female', 'Male'];
+
+const BASE_PATIENTS = [
   {
     id: 'pt-001',
     name: 'Margaret Holloway',
@@ -1059,4 +1062,17 @@ export const MOCK_PATIENTS: Patient[] = [
       { id: 'ci-035-5', label: 'SVT management and trigger avoidance taught', completed: false, category: 'education' },
     ],
   },
-];
+] satisfies Patient[];
+
+export const MOCK_PATIENTS: Patient[] = BASE_PATIENTS.map((patient, index): Patient => {
+  const year = 2026 - patient.age;
+  const month = ((index % 12) + 1).toString().padStart(2, '0');
+  const day = (((index * 3) % 27) + 1).toString().padStart(2, '0');
+  return {
+    ...patient,
+    sex: SEXES[index % SEXES.length],
+    dob: `${year}-${month}-${day}`,
+    nurseAssigned: ASSIGNED_NURSES[index % ASSIGNED_NURSES.length],
+    notes: index % 5 === 0 ? ['Care coordination note: follow up with family by 1400.'] : [],
+  };
+});

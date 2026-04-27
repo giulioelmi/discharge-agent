@@ -49,7 +49,7 @@ export default function TopBar({
   const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
   return (
-    <header className="flex items-center justify-between px-4 py-2 bg-white border-b border-slate-200 flex-shrink-0">
+    <header className="flex items-center justify-between px-4 py-2 bg-red-50 border-b border-red-200 flex-shrink-0">
 
       {/* Left: department switcher */}
       <div className="relative" ref={dropdownRef}>
@@ -57,8 +57,8 @@ export default function TopBar({
           onClick={() => setDeptOpen((v) => !v)}
           className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors group"
         >
-          <div className="w-6 h-6 rounded bg-teal-600 flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-[9px] font-bold">KB</span>
+          <div className="w-6 h-6 rounded bg-red-700 flex items-center justify-center flex-shrink-0">
+            <span className="text-white text-[9px] font-bold">USC</span>
           </div>
           <div className="text-left leading-tight">
             <div className="text-sm font-bold text-slate-800 group-hover:text-teal-700 transition-colors">

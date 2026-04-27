@@ -12,11 +12,11 @@ export default function Sidebar() {
     <aside className="flex flex-col w-16 lg:w-56 bg-navy-900 text-slate-300 flex-shrink-0 h-full">
       {/* Logo */}
       <div className="flex items-center gap-2 px-3 py-4 border-b border-navy-700">
-        <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-teal-500 flex-shrink-0">
+        <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-red-700 flex-shrink-0">
           <Zap size={18} className="text-white" />
         </div>
         <span className="hidden lg:block font-bold text-white text-base tracking-tight">
-          FlowBoard
+          Keck FlowBoard
         </span>
       </div>
 

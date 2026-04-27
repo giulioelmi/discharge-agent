@@ -7,11 +7,12 @@ type HourPoint = { hour: string; available: number; incoming: number };
 type OrCase = {
   id: string;
   patient: string;
+  doctor: string;
   procedure: string;
   orTime: string;
   expectedFloor: string;
   bed: string;
-  status: 'confirmed' | 'pending-bed';
+  status: 'pre-op' | 'in-surgery' | 'post-op' | 'confirmed' | 'pending-bed';
 };
 type StaffingRow = { shift: string; rns: number; target: number; pcts: number; targetPcts: number };
 
@@ -47,38 +48,42 @@ const DATA_4NORTH = {
   {
     id: 'or-001',
     patient: 'John Abramowitz',
+    doctor: 'Dr. N. Patel',
     procedure: 'Right hemicolectomy',
     orTime: '07:30',
     expectedFloor: '14:00',
     bed: '410A',
-    status: 'confirmed',
+    status: 'post-op',
   },
   {
     id: 'or-002',
     patient: 'Susan Mwangi',
+    doctor: 'Dr. T. Nguyen',
     procedure: 'Laparoscopic cholecystectomy',
     orTime: '09:00',
     expectedFloor: '14:30',
     bed: '412A',
-    status: 'confirmed',
+    status: 'in-surgery',
   },
   {
     id: 'or-003',
     patient: 'David Thornton',
+    doctor: 'Dr. J. Park',
     procedure: 'TURP',
     orTime: '11:00',
     expectedFloor: '16:00',
     bed: 'TBD',
-    status: 'pending-bed',
+    status: 'pre-op',
   },
   {
     id: 'or-004',
     patient: 'Amy Kowalski',
+    doctor: 'Dr. R. Albrecht',
     procedure: 'Appendectomy',
     orTime: '13:00',
     expectedFloor: '17:30',
     bed: 'TBD',
-    status: 'pending-bed',
+    status: 'pre-op',
   },
   ] satisfies OrCase[],
   staffing: [
@@ -104,15 +109,17 @@ const CAPACITY_BY_DEPT: Record<string, { maxBeds: number; hourly: HourPoint[]; o
       {
         id: 'icu-001',
         patient: 'Samuel Greer',
+        doctor: 'Dr. H. Collins',
         procedure: 'Post-op monitoring (CABG)',
         orTime: '08:15',
         expectedFloor: '12:30',
         bed: 'ICU-03',
-        status: 'confirmed',
+        status: 'post-op',
       },
       {
         id: 'icu-002',
         patient: 'Emily Zhao',
+        doctor: 'Dr. P. Menon',
         procedure: 'Neuro ICU admit (ICH)',
         orTime: '—',
         expectedFloor: '13:10',
@@ -138,15 +145,17 @@ const CAPACITY_BY_DEPT: Record<string, { maxBeds: number; hourly: HourPoint[]; o
       {
         id: 'pacu-001',
         patient: 'Alicia Romero',
+        doctor: 'Dr. C. Fuentes',
         procedure: 'Total knee arthroplasty',
         orTime: '10:30',
         expectedFloor: '13:00',
         bed: 'PACU-06',
-        status: 'confirmed',
+        status: 'post-op',
       },
       {
         id: 'pacu-002',
         patient: 'Glen Matthews',
+        doctor: 'Dr. B. Chen',
         procedure: 'Hernia repair',
         orTime: '11:45',
         expectedFloor: '14:15',
@@ -216,6 +225,7 @@ export default function CapacityView({ department }: { department?: Department }
   const [showIncoming, setShowIncoming] = useState(true);
   const [aiState, setAiState] = useState<'idle' | 'loading' | 'done'>('idle');
   const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [selectedClinician, setSelectedClinician] = useState('Sarah Chen, RN');
 
   const handleAISummary = async () => {
     if (aiState !== 'idle') return;
@@ -329,6 +339,7 @@ export default function CapacityView({ department }: { department?: Department }
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="text-left px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wide">Patient</th>
+                <th className="text-left px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wide">Doctor</th>
                 <th className="text-left px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wide">Procedure</th>
                 <th className="text-left px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wide">OR Time</th>
                 <th className="text-left px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wide">Exp. End Time</th>
@@ -340,6 +351,7 @@ export default function CapacityView({ department }: { department?: Department }
               {data.orCases.map((c) => (
                 <tr key={c.id} className="hover:bg-slate-50">
                   <td className="px-3 py-2 font-medium text-slate-700">{c.patient}</td>
+                  <td className="px-3 py-2 text-slate-600">{c.doctor}</td>
                   <td className="px-3 py-2 text-slate-600">{c.procedure}</td>
                   <td className="px-3 py-2 text-slate-600">{c.orTime}</td>
                   <td className="px-3 py-2 text-slate-600">{c.expectedFloor}</td>
@@ -351,12 +363,14 @@ export default function CapacityView({ department }: { department?: Department }
                   <td className="px-3 py-2">
                     <span
                       className={`px-2 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide ${
-                        c.status === 'confirmed'
+                        c.status === 'confirmed' || c.status === 'post-op'
                           ? 'bg-green-100 text-green-700'
+                          : c.status === 'in-surgery'
+                          ? 'bg-blue-100 text-blue-700'
                           : 'bg-amber-100 text-amber-700'
                       }`}
                     >
-                      {c.status === 'confirmed' ? 'Confirmed' : 'Needs Bed'}
+                      {c.status.replace('-', ' ')}
                     </span>
                   </td>
                 </tr>
@@ -369,6 +383,9 @@ export default function CapacityView({ department }: { department?: Department }
             {data.note}
           </p>
         )}
+        <p className="text-[10px] text-slate-500 mt-1">
+          Bed location updates and patient assignment changes are read-only in this view and should be completed in the EHR.
+        </p>
       </section>
 
       {/* Staffing Alignment */}
@@ -376,6 +393,16 @@ export default function CapacityView({ department }: { department?: Department }
         <div className="flex items-center gap-2 mb-3">
           <Users size={14} className="text-slate-600" />
           <h2 className="text-sm font-bold text-slate-700">Staffing Alignment</h2>
+          <select
+            value={selectedClinician}
+            onChange={(e) => setSelectedClinician(e.target.value)}
+            className="ml-auto text-[11px] border border-slate-200 rounded px-2 py-1"
+          >
+            <option>Sarah Chen, RN</option>
+            <option>Michael Lopez, RN</option>
+            <option>Angela Ward, RN</option>
+            <option>Thomas Green, RN</option>
+          </select>
         </div>
         <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
           <table className="w-full text-xs">
